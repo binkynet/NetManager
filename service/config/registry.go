@@ -50,7 +50,7 @@ func (r *registry) Get(id string) (WorkerConfiguration, error) {
 	}
 
 	// Read file
-	content, err := ioutil.ReadFile(filepath.Join(r.folder, id))
+	content, err := ioutil.ReadFile(filepath.Join(r.folder, id+".json"))
 	if err != nil {
 		return WorkerConfiguration{}, maskAny(err)
 	}

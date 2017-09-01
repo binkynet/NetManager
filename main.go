@@ -58,7 +58,7 @@ func main() {
 	pflag.StringVar(&mqttUserName, "mqtt-username", "", "Username of MQTT broker")
 	pflag.StringVar(&mqttPassword, "mqtt-password", "", "Password of MQTT broker")
 	pflag.StringVar(&mqttTopicPrefix, "mqtt-topicprefix", "", "Topic prefix for MQTT messages")
-	pflag.StringVar(&registryFolder, "registry-folder", "./registry", "Folder containing worker configurations")
+	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.Parse()
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()

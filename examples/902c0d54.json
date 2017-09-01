@@ -1,0 +1,6 @@
+{
+    "control-topic": "binky/test/control",
+    "data-topic": "binky/test/data",
+    "devices":[],
+    "objects":[]
+}
