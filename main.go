@@ -29,11 +29,12 @@ import (
 	"github.com/binkynet/NetManager/service"
 	"github.com/binkynet/NetManager/service/config"
 	"github.com/binkynet/NetManager/service/discovery"
-	"github.com/binkynet/NetManager/service/mqtt"
+	"github.com/binkynet/NetManager/service/server"
 )
 
 const (
-	projectName = "BinkyNet Network Manager"
+	projectName       = "BinkyNet Network Manager"
+	defaultServerPort = 3721
 )
 
 var (
@@ -50,6 +51,8 @@ func main() {
 	var mqttPassword string
 	var mqttTopicPrefix string
 	var registryFolder string
+	var serverHost string
+	var serverPort int
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
 	pflag.IntVar(&discoveryPort, "discovery-port", discoveryAPI.DefaultPort, "UDB port used by discovery service")
@@ -59,22 +62,14 @@ func main() {
 	pflag.StringVar(&mqttPassword, "mqtt-password", "", "Password of MQTT broker")
 	pflag.StringVar(&mqttTopicPrefix, "mqtt-topicprefix", "", "Topic prefix for MQTT messages")
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
+	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
+	pflag.IntVar(&serverPort, "port", defaultServerPort, "Port the server is listening on")
 	pflag.Parse()
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 
 	if mqttHost == "" {
 		Exitf("--mqtt-host missing")
-	}
-	mqttSvc, err := mqtt.NewService(mqtt.Config{
-		Host:      mqttHost,
-		Port:      mqttPort,
-		UserName:  mqttUserName,
-		Password:  mqttPassword,
-		TopicName: mqttTopicPrefix,
-	}, logger)
-	if err != nil {
-		Exitf("Failed to initialize MQTT connection: %v\n", err)
 	}
 
 	discoveryMsgs := make(chan discovery.RegisterWorkerMessage)
@@ -101,12 +96,19 @@ func main() {
 		MQTTPassword:          mqttPassword,
 	}, service.Dependencies{
 		Log:               logger,
-		MqttService:       mqttSvc,
 		ConfigRegistry:    configReg,
 		DiscoveryMessages: discoveryMsgs,
 	})
 	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)
+	}
+
+	httpServer, err := server.NewServer(server.Config{
+		Host: serverHost,
+		Port: serverPort,
+	}, svc, logger)
+	if err != nil {
+		Exitf("Failed to initialize HTTP server: %v\n", err)
 	}
 
 	// Prepare to shutdown in a controlled manor
@@ -120,6 +122,7 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return discoverySvc.Run(ctx) })
 	g.Go(func() error { return svc.Run(ctx) })
+	g.Go(func() error { return httpServer.Run(ctx) })
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v", err)
 	}

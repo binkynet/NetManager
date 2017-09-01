@@ -12,28 +12,25 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package mqtt
+package service
 
 import (
-	"github.com/rs/zerolog"
+	"fmt"
+	"strings"
+
+	"github.com/binkynet/NetManager/service/discovery"
 )
 
-type Config struct {
-	Host      string
-	Port      int
-	UserName  string
-	Password  string
-	TopicName string
+type workerRegistration struct {
+	discovery.RegisterWorkerMessage
 }
 
-// Service contains the API exposed by the MQTT service.
-type Service interface {
-}
-
-// NewService instantiates a new MQTT service.
-func NewService(config Config, logger zerolog.Logger) (Service, error) {
-	return &service{}, nil
-}
-
-type service struct {
+// Endpoint returns a URL used to reached the given local path on the worker.
+func (wr workerRegistration) Endpoint(localPath string) string {
+	scheme := "http"
+	if wr.Secure {
+		scheme = "https"
+	}
+	localPath = strings.TrimPrefix(localPath, "/")
+	return fmt.Sprintf("%s://%s:%d/%s", scheme, wr.RemoteHost, wr.Port, localPath)
 }

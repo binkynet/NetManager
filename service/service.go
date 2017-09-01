@@ -18,15 +18,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"sync"
 
 	discoveryAPI "github.com/binkynet/BinkyNet/discovery"
+	"github.com/binkynet/BinkyNet/model"
 	"github.com/rs/zerolog"
 
 	"github.com/binkynet/NetManager/service/config"
 	"github.com/binkynet/NetManager/service/discovery"
-	"github.com/binkynet/NetManager/service/mqtt"
 )
 
 const (
@@ -36,6 +36,8 @@ const (
 type Service interface {
 	// Run the manager until the given context is cancelled.
 	Run(ctx context.Context) error
+	// Get the configuration for a specific local worker
+	GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error)
 }
 
 type Config struct {
@@ -51,11 +53,15 @@ type Config struct {
 	MQTTUserName string
 	// MQTT password for authentication
 	MQTTPassword string
+	// Prefix for topics in MQTT
+	MQTTTopicPrefix string
+	// Endpoint of NetManager.
+	MyEndpoint string
 }
 
 type Dependencies struct {
-	Log               zerolog.Logger
-	MqttService       mqtt.Service
+	Log zerolog.Logger
+
 	ConfigRegistry    config.Registry
 	DiscoveryMessages <-chan discovery.RegisterWorkerMessage
 }
@@ -63,6 +69,9 @@ type Dependencies struct {
 type service struct {
 	Config
 	Dependencies
+
+	mutex   sync.RWMutex
+	workers map[string]workerRegistration
 }
 
 // NewService creates a Service instance and returns it.
@@ -70,6 +79,7 @@ func NewService(conf Config, deps Dependencies) (Service, error) {
 	return &service{
 		Config:       conf,
 		Dependencies: deps,
+		workers:      make(map[string]workerRegistration),
 	}, nil
 }
 
@@ -95,11 +105,22 @@ func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.Re
 		return
 	}
 	// Find config
-	conf, err := s.ConfigRegistry.Get(msg.ID)
+	_, err := s.ConfigRegistry.Get(msg.ID)
 	if err != nil {
 		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Cannot open worker configuration")
 		return
 	}
+
+	// Store registration
+	reg := workerRegistration{
+		RegisterWorkerMessage: discovery.RegisterWorkerMessage{
+			RegisterWorkerMessage: msg,
+			RemoteHost:            remoteHost,
+		},
+	}
+	s.mutex.Lock()
+	s.workers[msg.ID] = reg
+	s.mutex.Unlock()
 
 	// Build environment message
 	env := discoveryAPI.WorkerEnvironment{
@@ -109,15 +130,11 @@ func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.Re
 	env.Mqtt.Port = s.MQTTPort
 	env.Mqtt.UserName = s.MQTTUserName
 	env.Mqtt.Password = s.MQTTPassword
-	env.Mqtt.ControlTopic = conf.ControlTopic
-	env.Mqtt.DataTopic = conf.DataTopic
+	env.Mqtt.TopicPrefix = s.MQTTTopicPrefix
+	env.Manager.Endpoint = s.MyEndpoint
 
 	// Call environment endpoint
-	scheme := "http"
-	if msg.Secure {
-		scheme = "https"
-	}
-	url := fmt.Sprintf("%s://%s:%d/environment", scheme, remoteHost, msg.Port)
+	url := reg.Endpoint("/environment")
 	encodedEnv, err := json.Marshal(env)
 	if err != nil {
 		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Failed to encode environment information")
@@ -130,4 +147,14 @@ func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.Re
 	} else {
 		s.Log.Debug().Str("id", msg.ID).Msg("Call to environment endpoint succeeded")
 	}
+}
+
+// Get the configuration for a specific local worker
+func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error) {
+	conf, err := s.ConfigRegistry.Get(workerID)
+	if err != nil {
+		s.Log.Error().Err(err).Str("id", workerID).Msg("Cannot open worker configuration")
+		return model.LocalConfiguration{}, maskAny(err)
+	}
+	return conf.LocalConfiguration, nil
 }
