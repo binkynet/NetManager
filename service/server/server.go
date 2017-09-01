@@ -11,6 +11,7 @@ import (
 
 	"github.com/binkynet/BinkyNet/model"
 	"github.com/julienschmidt/httprouter"
+	restkit "github.com/pulcy/rest-kit"
 	"github.com/rs/zerolog"
 )
 
@@ -97,22 +98,8 @@ func (s *server) Run(ctx context.Context) error {
 }
 
 func handleError(w http.ResponseWriter, err error) {
-	writeError(w, http.StatusInternalServerError, err.Error())
-}
-
-func writeError(w http.ResponseWriter, status int, message string) {
-	if message == "" {
-		message = "Unknown error"
-	}
-	errResp := struct {
-		Error string `json:"error"`
-	}{
-		Error: message,
-	}
-	b, _ := json.Marshal(errResp)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write(b)
+	errResp := restkit.NewErrorResponseFromError(err)
+	sendJSON(w, errResp.HTTPStatusCode(), errResp)
 }
 
 func parseBody(r *http.Request, data interface{}) error {
@@ -122,7 +109,7 @@ func parseBody(r *http.Request, data interface{}) error {
 		return maskAny(err)
 	}
 	if err := json.Unmarshal(body, data); err != nil {
-		return maskAny(err)
+		return maskAny(restkit.BadRequestError(err.Error(), 0))
 	}
 	return nil
 }

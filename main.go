@@ -53,6 +53,7 @@ func main() {
 	var registryFolder string
 	var serverHost string
 	var serverPort int
+	var serverEndpoint string
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
 	pflag.IntVar(&discoveryPort, "discovery-port", discoveryAPI.DefaultPort, "UDB port used by discovery service")
@@ -64,12 +65,16 @@ func main() {
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
 	pflag.IntVar(&serverPort, "port", defaultServerPort, "Port the server is listening on")
+	pflag.StringVar(&serverEndpoint, "endpoint", "", "Endpoint used to reach the server")
 	pflag.Parse()
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 
 	if mqttHost == "" {
 		Exitf("--mqtt-host missing")
+	}
+	if serverEndpoint == "" {
+		Exitf("--endpoint missing")
 	}
 
 	discoveryMsgs := make(chan discovery.RegisterWorkerMessage)
@@ -94,6 +99,7 @@ func main() {
 		MQTTPort:              mqttPort,
 		MQTTUserName:          mqttUserName,
 		MQTTPassword:          mqttPassword,
+		MyEndpoint:            serverEndpoint,
 	}, service.Dependencies{
 		Log:               logger,
 		ConfigRegistry:    configReg,
