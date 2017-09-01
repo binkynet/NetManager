@@ -63,6 +63,9 @@ func main() {
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 
+	if mqttHost == "" {
+		Exitf("--mqtt-host missing")
+	}
 	mqttSvc, err := mqtt.NewService(mqtt.Config{
 		Host:      mqttHost,
 		Port:      mqttPort,
