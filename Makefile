@@ -4,7 +4,6 @@ VERSION := $(shell cat VERSION)
 COMMIT := $(shell git rev-parse --short HEAD)
 
 GOBUILDDIR := $(ROOTDIR)/.gobuild
-BINDIR := $(ROOTDIR)
 VENDORDIR := $(ROOTDIR)/vendor
 
 ORGPATH := github.com/binkynet
@@ -13,17 +12,20 @@ REPONAME := $(PROJECT)
 REPODIR := $(ORGDIR)/$(REPONAME)
 REPOPATH := $(ORGPATH)/$(REPONAME)
 BINNAME := bnManager
-BIN := $(BINDIR)/$(BINNAME)
 
 GOPATH := $(GOBUILDDIR)
 GOVERSION := 1.9.0-alpine
 
 ifndef GOOS
-	GOOS := linux
+	GOOS := $(shell go env GOHOSTOS)
 endif
 ifndef GOARCH
-	GOARCH := arm
+	GOARCH := $(shell go env GOHOSTARCH)
 endif
+
+BINPATH := bin/$(GOOS)/$(GOARCH)
+BINDIR := $(ROOTDIR)/$(BINPATH)
+BIN := $(BINDIR)/$(BINNAME)
 
 SOURCES := $(shell find . -name '*.go')
 
@@ -32,18 +34,20 @@ SOURCES := $(shell find . -name '*.go')
 all: $(BIN)
 
 clean:
-	rm -Rf $(BIN) $(GOBUILDDIR)
+	rm -Rf $(BIN) $(ROOTDIR)/$(BINNAME) $(ROOTDIR)/bin $(GOBUILDDIR)
 
 deps:
 	@${MAKE} -B -s .gobuild
 
 local:
-	@${MAKE} -B GOOS=$(shell go env GOHOSTOS) GOARCH=$(shell go env GOHOSTARCH) $(BIN)
+	@${MAKE} -B $(BIN)
+	ln -sf $(BIN) $(ROOTDIR)/$(BINNAME)
 
 .gobuild:
 	@mkdir -p $(ORGDIR)
 	@rm -f $(REPODIR) && ln -s ../../../../ $(REPODIR)
 	@GOPATH=$(GOPATH) pulsar go flatten -V $(VENDORDIR)
+	@GOPATH=$(GOPATH) pulsar go get $(ORGPATH)/BinkyNet/...
 
 $(BIN): .gobuild $(SOURCES)
 	docker run \
@@ -55,7 +59,7 @@ $(BIN): .gobuild $(SOURCES)
 		-e CGO_ENABLED=0 \
 		-w /usr/code/ \
 		golang:$(GOVERSION) \
-		go build -a -ldflags "-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" -o $(BINNAME) $(REPOPATH)
+		go build -a -ldflags "-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" -o $(BINPATH)/$(BINNAME) $(REPOPATH)
 
 test: $(BIN)
 	go test ./...
