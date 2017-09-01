@@ -19,11 +19,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/pkg/errors"
 	terminate "github.com/pulcy/go-terminate"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/errgroup"
 
+	discoveryAPI "github.com/binkynet/BinkyNet/discovery"
 	"github.com/binkynet/NetManager/service"
+	"github.com/binkynet/NetManager/service/config"
+	"github.com/binkynet/NetManager/service/discovery"
 	"github.com/binkynet/NetManager/service/mqtt"
 )
 
@@ -38,36 +43,64 @@ var (
 
 func main() {
 	var levelFlag string
-	var mqttNetwork string
-	var mqttAddress string
+	var discoveryPort int
+	var mqttHost string
+	var mqttPort int
 	var mqttUserName string
 	var mqttPassword string
-	var mqttTopicName string
+	var mqttTopicPrefix string
+	var registryFolder string
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
-	pflag.StringVar(&mqttNetwork, "mqtt-network", "tcp", "Network of MQTT connection")
-	pflag.StringVar(&mqttAddress, "mqtt-address", "", "Address of MQTT broker")
+	pflag.IntVar(&discoveryPort, "discovery-port", discoveryAPI.DefaultPort, "UDB port used by discovery service")
+	pflag.StringVar(&mqttHost, "mqtt-host", "", "Hostname of MQTT connection")
+	pflag.IntVar(&mqttPort, "mqtt-port", 1883, "Port of MQTT connection")
 	pflag.StringVar(&mqttUserName, "mqtt-username", "", "Username of MQTT broker")
 	pflag.StringVar(&mqttPassword, "mqtt-password", "", "Password of MQTT broker")
-	pflag.StringVar(&mqttTopicName, "mqtt-topicname", "", "Topic name for MQTT messages")
+	pflag.StringVar(&mqttTopicPrefix, "mqtt-topicprefix", "", "Topic prefix for MQTT messages")
+	pflag.StringVar(&registryFolder, "registry-folder", "./registry", "Folder containing worker configurations")
 	pflag.Parse()
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
 
 	mqttSvc, err := mqtt.NewService(mqtt.Config{
-		Network:   mqttNetwork,
-		Address:   mqttAddress,
+		Host:      mqttHost,
+		Port:      mqttPort,
 		UserName:  mqttUserName,
 		Password:  mqttPassword,
-		TopicName: mqttTopicName,
+		TopicName: mqttTopicPrefix,
 	}, logger)
 	if err != nil {
 		Exitf("Failed to initialize MQTT connection: %v\n", err)
 	}
 
-	svc, err := service.NewService(service.ServiceDependencies{
-		Log:         logger,
-		MqttService: mqttSvc,
+	discoveryMsgs := make(chan discoveryAPI.RegisterWorkerMessage)
+	discoverySvc, err := discovery.NewService(discovery.Config{
+		Port: discoveryPort,
+	}, discovery.Dependencies{
+		Log:      logger,
+		Messages: discoveryMsgs,
+	})
+	if err != nil {
+		Exitf("Failed to initialize discovery service: %v\n", err)
+	}
+
+	configReg, err := config.NewRegistry(registryFolder, mqttTopicPrefix)
+	if err != nil {
+		Exitf("Failed to initialize worker configuration registry: %v\n", err)
+	}
+
+	svc, err := service.NewService(service.Config{
+		RequiredWorkerVersion: "",
+		MQTTHost:              mqttHost,
+		MQTTPort:              mqttPort,
+		MQTTUserName:          mqttUserName,
+		MQTTPassword:          mqttPassword,
+	}, service.Dependencies{
+		Log:               logger,
+		MqttService:       mqttSvc,
+		ConfigRegistry:    configReg,
+		DiscoveryMessages: discoveryMsgs,
 	})
 	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)
@@ -81,12 +114,15 @@ func main() {
 	go t.ListenSignals()
 
 	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
-	if err := svc.Run(ctx); err != nil {
-		Exitf("Service run failed: %#v", err)
+	g, ctx := errgroup.WithContext(ctx)
+	g.Go(func() error { return discoverySvc.Run(ctx) })
+	g.Go(func() error { return svc.Run(ctx) })
+	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
+		Exitf("Failed to run services: %#v", err)
 	}
 }
 
-// Print the given error message and exit with code 1
+// Exitf prints the given error message and exit with code 1
 func Exitf(message string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, message, args...)
 	os.Exit(1)

@@ -34,7 +34,7 @@ SOURCES := $(shell find . -name '*.go')
 
 .PHONY: all clean deps
 
-all: build 
+all: local 
 
 build: $(BIN)
 
@@ -45,8 +45,8 @@ deps:
 	@${MAKE} -B -s .gobuild
 
 local:
-	@${MAKE} -B build
-	ln -sf $(BIN) $(ROOTDIR)/$(BINNAME)
+	@${MAKE} build
+	@ln -sf $(BIN) $(ROOTDIR)/$(BINNAME)
 
 binaries:
 	@${MAKE} -B GOOS=linux GOARCH=amd64 build
