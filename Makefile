@@ -22,16 +22,21 @@ endif
 ifndef GOARCH
 	GOARCH := $(shell go env GOHOSTARCH)
 endif
+ifndef GOEXE
+	GOEXE := $(shell go env GOHOSTEXE)
+endif
 
 BINPATH := bin/$(GOOS)/$(GOARCH)
 BINDIR := $(ROOTDIR)/$(BINPATH)
-BIN := $(BINDIR)/$(BINNAME)
+BIN := $(BINDIR)/$(BINNAME)$(GOEXE)
 
 SOURCES := $(shell find . -name '*.go')
 
 .PHONY: all clean deps
 
-all: $(BIN)
+all: build 
+
+build: $(BIN)
 
 clean:
 	rm -Rf $(BIN) $(ROOTDIR)/$(BINNAME) $(ROOTDIR)/bin $(GOBUILDDIR)
@@ -40,8 +45,14 @@ deps:
 	@${MAKE} -B -s .gobuild
 
 local:
-	@${MAKE} -B $(BIN)
+	@${MAKE} -B build
 	ln -sf $(BIN) $(ROOTDIR)/$(BINNAME)
+
+binaries:
+	@${MAKE} -B GOOS=linux GOARCH=amd64 build
+	@${MAKE} -B GOOS=linux GOARCH=arm build
+	@${MAKE} -B GOOS=darwin GOARCH=amd64 build
+	@${MAKE} -B GOOS=windows GOARCH=amd64 GOEXE=.exe build
 
 .gobuild:
 	@mkdir -p $(ORGDIR)
@@ -59,7 +70,7 @@ $(BIN): .gobuild $(SOURCES)
 		-e CGO_ENABLED=0 \
 		-w /usr/code/ \
 		golang:$(GOVERSION) \
-		go build -a -ldflags "-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" -o $(BINPATH)/$(BINNAME) $(REPOPATH)
+		go build -a -ldflags "-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" -o $(BINPATH)/$(BINNAME)$(GOEXE) $(REPOPATH)
 
 test: $(BIN)
 	go test ./...
