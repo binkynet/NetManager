@@ -15,13 +15,22 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 
 	discoveryAPI "github.com/binkynet/BinkyNet/discovery"
 	"github.com/rs/zerolog"
 
 	"github.com/binkynet/NetManager/service/config"
+	"github.com/binkynet/NetManager/service/discovery"
 	"github.com/binkynet/NetManager/service/mqtt"
+)
+
+const (
+	contentTypeJSON = "application/json"
 )
 
 type Service interface {
@@ -48,7 +57,7 @@ type Dependencies struct {
 	Log               zerolog.Logger
 	MqttService       mqtt.Service
 	ConfigRegistry    config.Registry
-	DiscoveryMessages <-chan discoveryAPI.RegisterWorkerMessage
+	DiscoveryMessages <-chan discovery.RegisterWorkerMessage
 }
 
 type service struct {
@@ -70,7 +79,7 @@ func (s *service) Run(ctx context.Context) error {
 		select {
 		case msg := <-s.DiscoveryMessages:
 			// Process message
-			go s.processDiscoveryMessage(msg)
+			go s.processDiscoveryMessage(msg.RemoteHost, msg.RegisterWorkerMessage)
 		case <-ctx.Done():
 			// Context cancalled
 			return nil
@@ -80,7 +89,7 @@ func (s *service) Run(ctx context.Context) error {
 
 // processDiscoveryMessage process the given message.
 // It calls the environment route of the local worker that has registered.
-func (s *service) processDiscoveryMessage(msg discoveryAPI.RegisterWorkerMessage) {
+func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.RegisterWorkerMessage) {
 	if msg.ID == "" {
 		s.Log.Error().Msg("Received RegisterWorkerMessage with empty ID")
 		return
@@ -91,6 +100,8 @@ func (s *service) processDiscoveryMessage(msg discoveryAPI.RegisterWorkerMessage
 		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Cannot open worker configuration")
 		return
 	}
+
+	// Build environment message
 	env := discoveryAPI.WorkerEnvironment{
 		RequiredWorkerVersion: s.RequiredWorkerVersion,
 	}
@@ -100,4 +111,23 @@ func (s *service) processDiscoveryMessage(msg discoveryAPI.RegisterWorkerMessage
 	env.Mqtt.Password = s.MQTTPassword
 	env.Mqtt.ControlTopic = conf.ControlTopic
 	env.Mqtt.DataTopic = conf.DataTopic
+
+	// Call environment endpoint
+	scheme := "http"
+	if msg.Secure {
+		scheme = "https"
+	}
+	url := fmt.Sprintf("%s://%s:%d/environment", scheme, remoteHost, msg.Port)
+	encodedEnv, err := json.Marshal(env)
+	if err != nil {
+		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Failed to encode environment information")
+		return
+	}
+	if resp, err := http.Post(url, contentTypeJSON, bytes.NewReader(encodedEnv)); err != nil {
+		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Failed call environment endpoint")
+	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		s.Log.Error().Str("id", msg.ID).Int("status", resp.StatusCode).Msg("Unexpected status code from environment call")
+	} else {
+		s.Log.Debug().Str("id", msg.ID).Msg("Call to environment endpoint succeeded")
+	}
 }

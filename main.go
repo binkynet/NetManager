@@ -74,7 +74,7 @@ func main() {
 		Exitf("Failed to initialize MQTT connection: %v\n", err)
 	}
 
-	discoveryMsgs := make(chan discoveryAPI.RegisterWorkerMessage)
+	discoveryMsgs := make(chan discovery.RegisterWorkerMessage)
 	discoverySvc, err := discovery.NewService(discovery.Config{
 		Port: discoveryPort,
 	}, discovery.Dependencies{

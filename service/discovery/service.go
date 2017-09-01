@@ -15,7 +15,7 @@ type Config struct {
 
 type Dependencies struct {
 	Log      zerolog.Logger
-	Messages chan api.RegisterWorkerMessage
+	Messages chan RegisterWorkerMessage
 }
 
 type Service interface {
@@ -29,6 +29,11 @@ func NewService(config Config, deps Dependencies) (Service, error) {
 		Config:       config,
 		Dependencies: deps,
 	}, nil
+}
+
+type RegisterWorkerMessage struct {
+	api.RegisterWorkerMessage
+	RemoteHost string
 }
 
 type service struct {
@@ -57,7 +62,10 @@ func (s *service) Run(ctx context.Context) error {
 				s.Log.Error().Err(err).Msg("Invalid message: JSON decode failed")
 			} else {
 				s.Log.Debug().Str("remote", remoteAddr.String()).Msg("Received request")
-				s.Messages <- msg
+				s.Messages <- RegisterWorkerMessage{
+					RegisterWorkerMessage: msg,
+					RemoteHost:            remoteAddr.IP.String(),
+				}
 			}
 		}
 	}
