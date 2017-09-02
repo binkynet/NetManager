@@ -51,10 +51,23 @@ func (s *service) Run(ctx context.Context) error {
 		return maskAny(err)
 	}
 	defer socket.Close()
+	returned := make(chan struct{})
+	defer close(returned)
+	go func() {
+		select {
+		case <-ctx.Done():
+			socket.Close()
+		case <-returned:
+			// Done
+		}
+	}()
 	for {
 		data := make([]byte, 4096)
 		n, remoteAddr, err := socket.ReadFromUDP(data)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
 			s.Log.Error().Err(err).Msg("Failed to read")
 		} else {
 			var msg api.RegisterWorkerMessage
