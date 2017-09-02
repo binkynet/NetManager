@@ -130,7 +130,7 @@ func main() {
 	g.Go(func() error { return svc.Run(ctx) })
 	g.Go(func() error { return httpServer.Run(ctx) })
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
-		Exitf("Failed to run services: %#v", err)
+		Exitf("Failed to run services: %#v\n", err)
 	}
 }
 
