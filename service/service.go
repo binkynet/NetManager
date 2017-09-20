@@ -25,6 +25,7 @@ import (
 	"github.com/binkynet/BinkyNet/model"
 	"github.com/rs/zerolog"
 
+	"github.com/binkynet/NetManager/client"
 	"github.com/binkynet/NetManager/service/config"
 	"github.com/binkynet/NetManager/service/discovery"
 )
@@ -33,11 +34,11 @@ const (
 	contentTypeJSON = "application/json"
 )
 
+// Service is the API exposed by this service.
 type Service interface {
 	// Run the manager until the given context is cancelled.
 	Run(ctx context.Context) error
-	// Get the configuration for a specific local worker
-	GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error)
+	client.API
 }
 
 type Config struct {
@@ -157,4 +158,19 @@ func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.L
 		return model.LocalConfiguration{}, maskAny(err)
 	}
 	return conf.LocalConfiguration, nil
+}
+
+// GetWorkers returns a list of registered workers
+func (s *service) GetWorkers(ctx context.Context) ([]client.WorkerInfo, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	result := make([]client.WorkerInfo, 0, len(s.workers))
+	for id, reg := range s.workers {
+		result = append(result, client.WorkerInfo{
+			ID:       id,
+			Endpoint: reg.Endpoint("/"),
+		})
+	}
+	return result, nil
 }

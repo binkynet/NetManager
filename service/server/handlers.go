@@ -25,3 +25,13 @@ func (s *server) handleGetWorkerConfig(w http.ResponseWriter, r *http.Request, p
 		sendJSON(w, http.StatusOK, result)
 	}
 }
+
+func (s *server) handleGetWorkers(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
+	ctx := context.Background()
+	result, err := s.api.GetWorkers(ctx)
+	if err != nil {
+		handleError(w, err)
+	} else {
+		sendJSON(w, http.StatusOK, result)
+	}
+}

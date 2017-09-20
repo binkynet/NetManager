@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/binkynet/BinkyNet/model"
+	"github.com/binkynet/NetManager/client"
 	"github.com/julienschmidt/httprouter"
 	restkit "github.com/pulcy/rest-kit"
 	"github.com/rs/zerolog"
@@ -18,11 +18,6 @@ import (
 type Server interface {
 	// Run the HTTP server until the given context is cancelled.
 	Run(ctx context.Context) error
-}
-
-type API interface {
-	// Get the configuration for a specific local worker
-	GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error)
 }
 
 type Config struct {
@@ -35,7 +30,7 @@ func (c Config) createTLSConfig() (*tls.Config, error) {
 }
 
 // NewServer creates a new server
-func NewServer(conf Config, api API, log zerolog.Logger) (Server, error) {
+func NewServer(conf Config, api client.API, log zerolog.Logger) (Server, error) {
 	return &server{
 		Config:     conf,
 		log:        log.With().Str("component", "server").Logger(),
@@ -48,13 +43,14 @@ type server struct {
 	Config
 	log        zerolog.Logger
 	requestLog zerolog.Logger
-	api        API
+	api        client.API
 }
 
 // Run the HTTP server until the given context is cancelled.
 func (s *server) Run(ctx context.Context) error {
 	mux := httprouter.New()
 	mux.NotFound = http.HandlerFunc(s.notFound)
+	mux.GET("/worker", s.handleGetWorkers)
 	mux.GET("/worker/:id/config", s.handleGetWorkerConfig)
 
 	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))

@@ -34,7 +34,7 @@ import (
 
 const (
 	projectName       = "BinkyNet Network Manager"
-	defaultServerPort = 3721
+	defaultServerPort = 8823
 )
 
 var (
