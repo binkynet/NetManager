@@ -3,5 +3,5 @@
 ## Usage 
 
 ```
-docker run -it binkynet/netmanager
+./bnManager --mqtt-host=mqtt.local --endpoint=http://$IP:8823
 ```
