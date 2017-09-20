@@ -43,14 +43,16 @@ type service struct {
 
 // Run the discovery service until the given context is cancelled.
 func (s *service) Run(ctx context.Context) error {
-	socket, err := net.ListenUDP("udp", &net.UDPAddr{
+	socket, err := net.ListenUDP("udp4", &net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
 		Port: s.Config.Port,
 	})
+	if socket != nil {
+		defer socket.Close()
+	}
 	if err != nil {
 		return maskAny(err)
 	}
-	defer socket.Close()
 	returned := make(chan struct{})
 	defer close(returned)
 	go func() {
