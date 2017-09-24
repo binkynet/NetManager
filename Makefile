@@ -56,7 +56,7 @@ binaries:
 
 .gobuild:
 	@mkdir -p $(ORGDIR)
-	@rm -f $(REPODIR) && ln -s ../../../../ $(REPODIR)
+	@pulsar go path -p $(REPOPATH)
 	@GOPATH=$(GOPATH) pulsar go flatten -V $(VENDORDIR)
 	@GOPATH=$(GOPATH) pulsar go get $(ORGPATH)/BinkyNet/...
 
