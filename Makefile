@@ -4,7 +4,7 @@ VERSION := $(shell cat VERSION)
 COMMIT := $(shell git rev-parse --short HEAD)
 
 GOBUILDDIR := $(ROOTDIR)/.gobuild
-VENDORDIR := $(ROOTDIR)/vendor
+VENDORDIR := $(ROOTDIR)/deps
 
 ORGPATH := github.com/binkynet
 ORGDIR := $(GOBUILDDIR)/src/$(ORGPATH)
@@ -14,7 +14,8 @@ REPOPATH := $(ORGPATH)/$(REPONAME)
 BINNAME := bnManager
 
 GOPATH := $(GOBUILDDIR)
-GOVERSION := 1.9.0-alpine
+GOVERSION := 1.10.3-alpine
+GOCACHEVOL := $(PROJECT)-gocache
 
 ifndef GOOS
 	GOOS := $(shell go env GOHOSTOS)
@@ -60,10 +61,16 @@ binaries:
 	@GOPATH=$(GOPATH) pulsar go flatten -V $(VENDORDIR)
 	@GOPATH=$(GOPATH) pulsar go get $(ORGPATH)/BinkyNet/...
 
-$(BIN): .gobuild $(SOURCES)
+.PHONY: $(GOCACHEVOL)
+$(GOCACHEVOL):
+	docker volume create $(GOCACHEVOL)
+
+$(BIN): .gobuild $(SOURCES) $(GOCACHEVOL)
 	docker run \
 		--rm \
 		-v $(ROOTDIR):/usr/code \
+		-v $(GOCACHEVOL):/usr/cache \
+		-e GOCACHE=/usr/cache \
 		-e GOPATH=/usr/code/.gobuild \
 		-e GOOS=$(GOOS) \
 		-e GOARCH=$(GOARCH) \

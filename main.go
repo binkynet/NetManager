@@ -17,7 +17,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/pkg/errors"
 	terminate "github.com/pulcy/go-terminate"
@@ -76,6 +79,23 @@ func main() {
 	if serverEndpoint == "" {
 		Exitf("--endpoint missing")
 	}
+	serverEndpoint = mustFixEndpointPort(serverEndpoint, serverPort)
+	logger.Debug().
+		Str("endpoint", serverEndpoint).
+		Msg("Cleaned output")
+	origMqttHost := mqttHost
+	mqttHost = mustResolveDNSName(mqttHost)
+	logger.Debug().
+		Str("host", origMqttHost).
+		Str("address", mqttHost).
+		Msg("Resolved mqtt-host")
+
+	// Prepare to shutdown in a controlled manor
+	ctx, cancel := context.WithCancel(context.Background())
+	t := terminate.NewTerminator(func(template string, args ...interface{}) {
+		logger.Info().Msgf(template, args...)
+	}, cancel)
+	go t.ListenSignals()
 
 	discoveryMsgs := make(chan discovery.RegisterWorkerMessage)
 	discoverySvc, err := discovery.NewService(discovery.Config{
@@ -88,7 +108,7 @@ func main() {
 		Exitf("Failed to initialize discovery service: %v\n", err)
 	}
 
-	configReg, err := config.NewRegistry(registryFolder, mqttTopicPrefix)
+	configReg, err := config.NewRegistry(ctx, registryFolder, mqttTopicPrefix)
 	if err != nil {
 		Exitf("Failed to initialize worker configuration registry: %v\n", err)
 	}
@@ -117,13 +137,6 @@ func main() {
 		Exitf("Failed to initialize HTTP server: %v\n", err)
 	}
 
-	// Prepare to shutdown in a controlled manor
-	ctx, cancel := context.WithCancel(context.Background())
-	t := terminate.NewTerminator(func(template string, args ...interface{}) {
-		logger.Info().Msgf(template, args...)
-	}, cancel)
-	go t.ListenSignals()
-
 	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
 	g, ctx := errgroup.WithContext(ctx)
 	g.Go(func() error { return discoverySvc.Run(ctx) })
@@ -138,4 +151,29 @@ func main() {
 func Exitf(message string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, message, args...)
 	os.Exit(1)
+}
+
+func mustFixEndpointPort(serverEndpoint string, port int) string {
+	u, err := url.Parse(serverEndpoint)
+	if err != nil {
+		Exitf("Server endpoint is invalid: %s\n", err)
+	}
+	u.Host = net.JoinHostPort(u.Hostname(), strconv.Itoa(port))
+	return u.String()
+}
+
+// mustResolveDNSName resolves the given hostname in an IP address.
+func mustResolveDNSName(host string) string {
+	if ip := net.ParseIP(host); ip != nil {
+		// Already IP address
+		return host
+	}
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		Exitf("Failed to lookup host '%s': %v\n", host, err)
+	}
+	if len(addrs) == 0 {
+		Exitf("Lookup of host '%s' yielded no addresses\n", host)
+	}
+	return addrs[0]
 }
