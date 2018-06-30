@@ -21,7 +21,7 @@ type Registry interface {
 
 // WorkerConfiguration file format for local worker configuration file.
 type WorkerConfiguration struct {
-	model.LocalConfiguration
+	model.LocalWorkerConfig
 }
 
 type registryEntry struct {
@@ -113,7 +113,7 @@ func readWorkerConfiguration(folder, id string) (WorkerConfiguration, time.Time,
 		}
 		// Parse file
 		var conf WorkerConfiguration
-		if err := yaml.Unmarshal(content, &conf.LocalConfiguration); err != nil {
+		if err := yaml.Unmarshal(content, &conf.LocalWorkerConfig); err != nil {
 			return WorkerConfiguration{}, time.Time{}, maskAny(err)
 		}
 		return conf, info.ModTime(), nil
@@ -130,7 +130,7 @@ func readWorkerConfiguration(folder, id string) (WorkerConfiguration, time.Time,
 
 		// Parse file
 		var conf WorkerConfiguration
-		if err := json.Unmarshal(content, &conf); err != nil {
+		if err := json.Unmarshal(content, &conf.LocalWorkerConfig); err != nil {
 			return WorkerConfiguration{}, time.Time{}, maskAny(err)
 		}
 		return conf, info.ModTime(), nil

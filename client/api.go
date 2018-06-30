@@ -9,7 +9,7 @@ import (
 // API (HTTPs) of the NetManager.
 type API interface {
 	// GetWorkerConfig requests the local worker configuration for a worker with given id.
-	GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error)
+	GetWorkerConfig(ctx context.Context, workerID string) (model.LocalWorkerConfig, error)
 	// Return a list of registered workers
 	GetWorkers(ctx context.Context) ([]WorkerInfo, error)
 }
@@ -19,5 +19,5 @@ type WorkerInfo struct {
 	// Unique ID of the worker
 	ID string `json:"id"`
 	// Endpoint of the worker
-	Endpoint string
+	Endpoint string `json:"endpoint"`
 }

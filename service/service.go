@@ -151,13 +151,13 @@ func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.Re
 }
 
 // Get the configuration for a specific local worker
-func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.LocalConfiguration, error) {
+func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.LocalWorkerConfig, error) {
 	conf, err := s.ConfigRegistry.Get(workerID)
 	if err != nil {
 		s.Log.Error().Err(err).Str("id", workerID).Msg("Cannot open worker configuration")
-		return model.LocalConfiguration{}, maskAny(err)
+		return model.LocalWorkerConfig{}, maskAny(err)
 	}
-	return conf.LocalConfiguration, nil
+	return conf.LocalWorkerConfig, nil
 }
 
 // GetWorkers returns a list of registered workers
