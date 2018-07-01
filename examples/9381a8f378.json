@@ -25,8 +25,9 @@
                 "servo": {
                     "pins": [{"device": "pwm1", "index": 1}],
                     "config": {
-                        "straight": 100,
-                        "off": 550
+                        "straight": "125",
+                        "off": "550",
+                        "step": "15"
                     }
                 }
             }
