@@ -14,13 +14,21 @@
         "led1": {
             "type": "binary-output",
             "connections": {
-                "output": [{"device": "io1", "index": 9}]
+                "output": {
+                    "pins": [{"device": "io1", "index": 9}]
+                }
             }
         },
         "servo-switch1": {
             "type": "servo-switch",
             "connections": {
-                "servo": [{"device": "pwm1", "index": 1}]
+                "servo": {
+                    "pins": [{"device": "pwm1", "index": 1}],
+                    "config": {
+                        "straight": 100,
+                        "off": 550
+                    }
+                }
             }
         }
     }
