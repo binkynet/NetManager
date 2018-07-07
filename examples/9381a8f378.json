@@ -19,6 +19,14 @@
                 }
             }
         },
+        "sensor1": {
+            "type": "binary-sensor",
+            "connections": {
+                "sensor": {
+                    "pins": [{"device": "io1", "index": 1}]
+                }
+            }
+        },
         "servo-switch1": {
             "type": "servo-switch",
             "connections": {
