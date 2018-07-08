@@ -48,6 +48,12 @@
                         "off": "550",
                         "step": "15"
                     }
+                },
+                "phase-straight-relay": {
+                    "pins": [{"device": "io1", "index": 12}]
+                },
+                "phase-off-relay": {
+                    "pins": [{"device": "io1", "index": 13}]
                 }
             }
         }
