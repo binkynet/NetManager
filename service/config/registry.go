@@ -30,19 +30,21 @@ type registryEntry struct {
 }
 
 // NewRegistry create a new Registry implementation.
-func NewRegistry(ctx context.Context, folder, defaultTopicPrefix string) (Registry, error) {
+func NewRegistry(ctx context.Context, folder, defaultTopicPrefix string, reconfigureQueue chan string) (Registry, error) {
 	r := &registry{
-		folder:  folder,
-		configs: make(map[string]registryEntry),
+		folder:           folder,
+		configs:          make(map[string]registryEntry),
+		reconfigureQueue: reconfigureQueue,
 	}
 	go r.runMaintenance(ctx)
 	return r, nil
 }
 
 type registry struct {
-	mutex   sync.Mutex
-	folder  string
-	configs map[string]registryEntry
+	mutex            sync.Mutex
+	folder           string
+	configs          map[string]registryEntry
+	reconfigureQueue chan string
 }
 
 // Get returns the configuration for a worker with given ID.
@@ -78,7 +80,7 @@ func (r *registry) runMaintenance(ctx context.Context) {
 		r.removeChangedConfigs()
 
 		select {
-		case <-time.After(time.Second * 15):
+		case <-time.After(time.Second * 5):
 			// Continue
 		case <-ctx.Done():
 			return
@@ -97,6 +99,9 @@ func (r *registry) removeChangedConfigs() {
 		_, modTime, err := readWorkerConfiguration(r.folder, id)
 		if err != nil || modTime != entry.modTime {
 			delete(r.configs, id)
+			if r.reconfigureQueue != nil {
+				r.reconfigureQueue <- id
+			}
 		}
 	}
 }

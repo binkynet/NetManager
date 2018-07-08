@@ -108,7 +108,8 @@ func main() {
 		Exitf("Failed to initialize discovery service: %v\n", err)
 	}
 
-	configReg, err := config.NewRegistry(ctx, registryFolder, mqttTopicPrefix)
+	reconfigureQueue := make(chan string, 64)
+	configReg, err := config.NewRegistry(ctx, registryFolder, mqttTopicPrefix, reconfigureQueue)
 	if err != nil {
 		Exitf("Failed to initialize worker configuration registry: %v\n", err)
 	}
@@ -124,6 +125,7 @@ func main() {
 		Log:               logger,
 		ConfigRegistry:    configReg,
 		DiscoveryMessages: discoveryMsgs,
+		ReconfigureQueue:  reconfigureQueue,
 	})
 	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)

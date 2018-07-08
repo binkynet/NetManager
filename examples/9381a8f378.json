@@ -27,6 +27,17 @@
                 }
             }
         },
+        "relay-switch1": {
+            "type": "relay-switch",
+            "connections": {
+                "straight-relay": {
+                    "pins": [{"device": "io1", "index": 10}]
+                },
+                "off-relay": {
+                    "pins": [{"device": "io1", "index": 11}]
+                }
+            }
+        },
         "servo-switch1": {
             "type": "servo-switch",
             "connections": {
