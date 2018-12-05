@@ -186,6 +186,36 @@ func (s *service) ReconfigureWorker(ctx context.Context, workerID string) error 
 	return nil
 }
 
+// ShutdownWorker calls the worker to perform a complete reload.
+func (s *service) ShutdownWorker(ctx context.Context, workerID string) error {
+	s.mutex.Lock()
+	reg, found := s.workers[workerID]
+	s.mutex.Unlock()
+
+	if !found {
+		return maskAny(fmt.Errorf("No such worker: %s", workerID))
+	}
+
+	url := reg.Endpoint("/shutdown")
+	req, err := http.NewRequest("POST", url, nil)
+	if err != nil {
+		return maskAny(err)
+	}
+	lctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+	req = req.WithContext(lctx)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return maskAny(err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		s.Log.Error().Str("id", workerID).Int("status", resp.StatusCode).Msg("Unexpected status code from POST shutdown call")
+		return maskAny(fmt.Errorf("Unexpected status code %d from POST shutdown call", resp.StatusCode))
+	}
+	s.Log.Debug().Str("id", workerID).Msg("Call to environment endpoint succeeded")
+	return nil
+}
+
 // Get the configuration for a specific local worker
 func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.LocalWorkerConfig, error) {
 	conf, err := s.ConfigRegistry.Get(workerID)

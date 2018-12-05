@@ -1,0 +1,19 @@
+{
+    "alias": "test",
+    "devices": {
+        "io1": {
+            "address": "0x20",
+            "type": "mcp23008"
+        }
+    },
+    "objects": {
+        "sensor1": {
+            "type": "binary-sensor",
+            "connections": {
+                "sensor": {
+                    "pins": [{"device": "io1", "index": 2}]
+                }
+            }
+        }
+    }
+}
