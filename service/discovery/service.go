@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"sync"
 
 	api "github.com/binkynet/BinkyNet/discovery"
 	"github.com/rs/zerolog"
@@ -47,9 +48,24 @@ func (s *service) Run(ctx context.Context) error {
 		IP:   net.IPv4(0, 0, 0, 0),
 		Port: s.Config.Port,
 	})
-	if socket != nil {
-		defer socket.Close()
+	var mutex sync.Mutex
+
+	closeSocket := func() {
+		mutex.Lock()
+		tmp := socket
+		socket = nil
+		mutex.Unlock()
+		if tmp != nil {
+			socket = nil
+			s.Log.Debug().Msg("Closing discovery socket")
+			if err := tmp.Close(); err != nil {
+				s.Log.Error().Err(err).Msg("Failed to close discovery socket")
+			} else {
+				s.Log.Info().Msg("Closed discovery socket")
+			}
+		}
 	}
+	defer closeSocket()
 	if err != nil {
 		return maskAny(err)
 	}
@@ -58,7 +74,7 @@ func (s *service) Run(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			socket.Close()
+			closeSocket()
 		case <-returned:
 			// Done
 		}
