@@ -2,7 +2,7 @@
     "alias": "test",
     "devices": {
         "io1": {
-            "address": "0x20",
+            "address": "0x28",
             "type": "mcp23008"
         }
     },
@@ -17,3 +17,4 @@
         }
     }
 }
+
