@@ -3,82 +3,31 @@ ROOTDIR := $(shell pwd)
 VERSION := $(shell cat VERSION)
 COMMIT := $(shell git rev-parse --short HEAD)
 
-GOBUILDDIR := $(ROOTDIR)/.gobuild
-VENDORDIR := $(ROOTDIR)/deps
-
 ORGPATH := github.com/binkynet
-ORGDIR := $(GOBUILDDIR)/src/$(ORGPATH)
 REPONAME := $(PROJECT)
-REPODIR := $(ORGDIR)/$(REPONAME)
 REPOPATH := $(ORGPATH)/$(REPONAME)
 BINNAME := bnManager
 
-GOPATH := $(GOBUILDDIR)
-GOVERSION := 1.10.3-alpine
-GOCACHEVOL := $(PROJECT)-gocache
-
-ifndef GOOS
-	GOOS := $(shell go env GOHOSTOS)
-endif
-ifndef GOARCH
-	GOARCH := $(shell go env GOHOSTARCH)
-endif
-ifndef GOEXE
-	GOEXE := $(shell go env GOHOSTEXE)
-endif
-
-BINPATH := bin/$(GOOS)/$(GOARCH)
-BINDIR := $(ROOTDIR)/$(BINPATH)
-BIN := $(BINDIR)/$(BINNAME)$(GOEXE)
-
 SOURCES := $(shell find . -name '*.go')
 
-.PHONY: all clean deps
+.PHONY: all clean deps bootstrap binaries test
 
-all: local 
-
-build: $(BIN)
+all: binaries
 
 clean:
-	rm -Rf $(BIN) $(ROOTDIR)/$(BINNAME) $(ROOTDIR)/bin $(GOBUILDDIR)
+	rm -Rf $(ROOTDIR)/bin
 
-deps:
-	@${MAKE} -B -s .gobuild
+bootstrap:
+	go get github.com/mitchellh/gox
 
-local:
-	@${MAKE} build
-	@ln -sf $(BIN) $(ROOTDIR)/$(BINNAME)
+binaries: $(SOURCES)
+	CGO_ENABLED=0 gox \
+		-osarch="linux/amd64 linux/arm darwin/amd64 windows/amd64" \
+		-ldflags="-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" \
+		-output="bin/{{.OS}}/{{.Arch}}/$(BINNAME)" \
+		-tags="netgo" \
+		./...
 
-binaries:
-	@${MAKE} -B GOOS=linux GOARCH=amd64 build
-	@${MAKE} -B GOOS=linux GOARCH=arm build
-	@${MAKE} -B GOOS=darwin GOARCH=amd64 build
-	@${MAKE} -B GOOS=windows GOARCH=amd64 GOEXE=.exe build
-
-.gobuild:
-	@mkdir -p $(ORGDIR)
-	@pulsar go path -p $(REPOPATH)
-	@GOPATH=$(GOPATH) pulsar go flatten -V $(VENDORDIR)
-	@GOPATH=$(GOPATH) pulsar go get $(ORGPATH)/BinkyNet/...
-
-.PHONY: $(GOCACHEVOL)
-$(GOCACHEVOL):
-	docker volume create $(GOCACHEVOL)
-
-$(BIN): .gobuild $(SOURCES) $(GOCACHEVOL)
-	docker run \
-		--rm \
-		-v $(ROOTDIR):/usr/code \
-		-v $(GOCACHEVOL):/usr/cache \
-		-e GOCACHE=/usr/cache \
-		-e GOPATH=/usr/code/.gobuild \
-		-e GOOS=$(GOOS) \
-		-e GOARCH=$(GOARCH) \
-		-e CGO_ENABLED=0 \
-		-w /usr/code/ \
-		golang:$(GOVERSION) \
-		go build -ldflags "-X main.projectVersion=$(VERSION) -X main.projectBuild=$(COMMIT)" -o $(BINPATH)/$(BINNAME)$(GOEXE) $(REPOPATH)
-
-test: $(BIN)
+test:
 	go test ./...
 
