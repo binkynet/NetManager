@@ -38,5 +38,5 @@ update-modules:
 	go mod edit \
 		-replace github.com/coreos/go-systemd=github.com/coreos/go-systemd@e64a0ec8b42a61e2a9801dc1d0abe539dea79197
 	go get -u \
-		github.com/binkynet/BinkyNet@dbd3042ac472d53df02919dcf453d66d56dc1c61
+		github.com/binkynet/BinkyNet@38dfa13f57897ea8262842509d28baa4ee039e76
 	go mod tidy

@@ -50,3 +50,39 @@ func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWo
 func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActualsServer) error {
 	return nil // TODO
 }
+
+// SetSensorActuals is used to send a stream of actual sensor statuses to
+// the network master.
+func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSensorActualsServer) error {
+	return nil // TODO
+}
+
+// GetOutputRequests is used to get a stream of output requests from the network
+// master.
+func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.LocalWorkerControlService_GetOutputRequestsServer) error {
+	return nil // TODO
+}
+
+// SetOutputActuals is used to send a stream of actual output statuses to
+// the network master.
+func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutputActualsServer) error {
+	return nil // TODO
+}
+
+// GetSwitchRequests is used to get a stream of switch requests from the network
+// master.
+func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.LocalWorkerControlService_GetSwitchRequestsServer) error {
+	return nil // TODO
+}
+
+// SetSwitchActuals is used to send a stream of actual switch statuses to
+// the network master.
+func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitchActualsServer) error {
+	return nil // TODO
+}
+
+// GetClock is used to get a stream of switch current time of day from the network
+// master.
+func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_GetClockServer) error {
+	return nil // TODO
+}
