@@ -31,3 +31,12 @@ binaries: $(SOURCES)
 test:
 	go test ./...
 
+.PHONY: update-modules
+update-modules:
+	rm -f go.mod go.sum 
+	go mod init github.com/binkynet/NetManager
+	go mod edit \
+		-replace github.com/coreos/go-systemd=github.com/coreos/go-systemd@e64a0ec8b42a61e2a9801dc1d0abe539dea79197
+	go get -u \
+		github.com/binkynet/BinkyNet@dbd3042ac472d53df02919dcf453d66d56dc1c61
+	go mod tidy

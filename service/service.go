@@ -15,21 +15,13 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"sync"
-	"time"
 
-	discoveryAPI "github.com/binkynet/BinkyNet/discovery"
-	"github.com/binkynet/BinkyNet/model"
+	model "github.com/binkynet/BinkyNet/apis/v1"
+	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 
-	"github.com/binkynet/NetManager/client"
 	"github.com/binkynet/NetManager/service/config"
-	"github.com/binkynet/NetManager/service/discovery"
 )
 
 const (
@@ -40,7 +32,9 @@ const (
 type Service interface {
 	// Run the manager until the given context is cancelled.
 	Run(ctx context.Context) error
-	client.API
+
+	model.LocalWorkerConfigServiceServer
+	model.LocalWorkerControlServiceServer
 }
 
 type Config struct {
@@ -48,42 +42,28 @@ type Config struct {
 	// If the actual version is different, the LocalWorker must update
 	// itself.
 	RequiredWorkerVersion string
-	// MQTT server host
-	MQTTHost string
-	// MQTT server port
-	MQTTPort int
-	// MQTT user name for authentication
-	MQTTUserName string
-	// MQTT password for authentication
-	MQTTPassword string
-	// Prefix for topics in MQTT
-	MQTTTopicPrefix string
-	// Endpoint of NetManager.
-	MyEndpoint string
 }
 
 type Dependencies struct {
 	Log zerolog.Logger
 
-	ConfigRegistry    config.Registry
-	DiscoveryMessages <-chan discovery.RegisterWorkerMessage
-	ReconfigureQueue  <-chan string
+	ConfigRegistry   config.Registry
+	ReconfigureQueue <-chan string
 }
 
 type service struct {
 	Config
 	Dependencies
 
-	mutex   sync.RWMutex
-	workers map[string]workerRegistration
+	configChanges *pubsub.PubSub
 }
 
 // NewService creates a Service instance and returns it.
 func NewService(conf Config, deps Dependencies) (Service, error) {
 	return &service{
-		Config:       conf,
-		Dependencies: deps,
-		workers:      make(map[string]workerRegistration),
+		Config:        conf,
+		Dependencies:  deps,
+		configChanges: pubsub.New(),
 	}, nil
 }
 
@@ -91,12 +71,13 @@ func NewService(conf Config, deps Dependencies) (Service, error) {
 func (s *service) Run(ctx context.Context) error {
 	for {
 		select {
-		case msg := <-s.DiscoveryMessages:
-			// Process message
-			go s.processDiscoveryMessage(msg.RemoteHost, msg.RegisterWorkerMessage)
+		/*case msg := <-s.DiscoveryMessages:
+		// Process message
+		go s.processDiscoveryMessage(msg.RemoteHost, msg.RegisterWorkerMessage)
+		*/
 		case id := <-s.ReconfigureQueue:
-			// Reconfigure worker
-			go s.ReconfigureWorker(ctx, id)
+			// Reconfigure worker with id
+			s.configChanges.Pub(id)
 		case <-ctx.Done():
 			// Context cancalled
 			return nil
@@ -104,6 +85,7 @@ func (s *service) Run(ctx context.Context) error {
 	}
 }
 
+/*
 // processDiscoveryMessage process the given message.
 // It calls the environment route of the local worker that has registered.
 func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.RegisterWorkerMessage) {
@@ -240,3 +222,4 @@ func (s *service) GetWorkers(ctx context.Context) ([]client.WorkerInfo, error) {
 	}
 	return result, nil
 }
+*/

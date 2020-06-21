@@ -17,27 +17,23 @@ package main
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/url"
 	"os"
-	"strconv"
 
+	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/pkg/errors"
 	terminate "github.com/pulcy/go-terminate"
 	"github.com/rs/zerolog"
 	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 
-	discoveryAPI "github.com/binkynet/BinkyNet/discovery"
 	"github.com/binkynet/NetManager/service"
 	"github.com/binkynet/NetManager/service/config"
-	"github.com/binkynet/NetManager/service/discovery"
 	"github.com/binkynet/NetManager/service/server"
 )
 
 const (
-	projectName       = "BinkyNet Network Manager"
-	defaultServerPort = 8823
+	projectName     = "BinkyNet Network Manager"
+	defaultGrpcPort = 8823
 )
 
 var (
@@ -47,48 +43,17 @@ var (
 
 func main() {
 	var levelFlag string
-	var discoveryPort int
-	var mqttHost string
-	var mqttPort int
-	var mqttUserName string
-	var mqttPassword string
-	var mqttTopicPrefix string
 	var registryFolder string
 	var serverHost string
-	var serverPort int
-	var serverEndpoint string
+	var grpcPort int
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
-	pflag.IntVar(&discoveryPort, "discovery-port", discoveryAPI.DefaultPort, "UDB port used by discovery service")
-	pflag.StringVar(&mqttHost, "mqtt-host", "", "Hostname of MQTT connection")
-	pflag.IntVar(&mqttPort, "mqtt-port", 1883, "Port of MQTT connection")
-	pflag.StringVar(&mqttUserName, "mqtt-username", "", "Username of MQTT broker")
-	pflag.StringVar(&mqttPassword, "mqtt-password", "", "Password of MQTT broker")
-	pflag.StringVar(&mqttTopicPrefix, "mqtt-topicprefix", "", "Topic prefix for MQTT messages")
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
-	pflag.IntVar(&serverPort, "port", defaultServerPort, "Port the server is listening on")
-	pflag.StringVar(&serverEndpoint, "endpoint", "", "Endpoint used to reach the server")
+	pflag.IntVar(&grpcPort, "port", defaultGrpcPort, "Port the server is listening on")
 	pflag.Parse()
 
 	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
-
-	if mqttHost == "" {
-		Exitf("--mqtt-host missing")
-	}
-	if serverEndpoint == "" {
-		Exitf("--endpoint missing")
-	}
-	serverEndpoint = mustFixEndpointPort(serverEndpoint, serverPort)
-	logger.Debug().
-		Str("endpoint", serverEndpoint).
-		Msg("Cleaned output")
-	origMqttHost := mqttHost
-	mqttHost = mustResolveDNSName(mqttHost)
-	logger.Debug().
-		Str("host", origMqttHost).
-		Str("address", mqttHost).
-		Msg("Resolved mqtt-host")
 
 	// Prepare to shutdown in a controlled manor
 	ctx, cancel := context.WithCancel(context.Background())
@@ -97,53 +62,42 @@ func main() {
 	}, cancel)
 	go t.ListenSignals()
 
-	discoveryMsgs := make(chan discovery.RegisterWorkerMessage)
-	discoverySvc, err := discovery.NewService(discovery.Config{
-		Port: discoveryPort,
-	}, discovery.Dependencies{
-		Log:      logger,
-		Messages: discoveryMsgs,
-	})
-	if err != nil {
-		Exitf("Failed to initialize discovery service: %v\n", err)
-	}
-
 	reconfigureQueue := make(chan string, 64)
-	configReg, err := config.NewRegistry(ctx, registryFolder, mqttTopicPrefix, reconfigureQueue)
+	configReg, err := config.NewRegistry(ctx, registryFolder, reconfigureQueue)
 	if err != nil {
 		Exitf("Failed to initialize worker configuration registry: %v\n", err)
 	}
 
 	svc, err := service.NewService(service.Config{
 		RequiredWorkerVersion: "",
-		MQTTHost:              mqttHost,
-		MQTTPort:              mqttPort,
-		MQTTUserName:          mqttUserName,
-		MQTTPassword:          mqttPassword,
-		MyEndpoint:            serverEndpoint,
 	}, service.Dependencies{
-		Log:               logger,
-		ConfigRegistry:    configReg,
-		DiscoveryMessages: discoveryMsgs,
-		ReconfigureQueue:  reconfigureQueue,
+		Log:              logger,
+		ConfigRegistry:   configReg,
+		ReconfigureQueue: reconfigureQueue,
 	})
 	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)
 	}
 
-	httpServer, err := server.NewServer(server.Config{
-		Host: serverHost,
-		Port: serverPort,
+	server, err := server.NewServer(server.Config{
+		Host:     serverHost,
+		GRPCPort: grpcPort,
 	}, svc, logger)
 	if err != nil {
-		Exitf("Failed to initialize HTTP server: %v\n", err)
+		Exitf("Failed to initialize Server: %v\n", err)
 	}
 
 	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
 	g, ctx := errgroup.WithContext(ctx)
-	g.Go(func() error { return discoverySvc.Run(ctx) })
 	g.Go(func() error { return svc.Run(ctx) })
-	g.Go(func() error { return httpServer.Run(ctx) })
+	g.Go(func() error { return server.Run(ctx) })
+	g.Go(func() error {
+		return api.RegisterServiceEntry(ctx, api.ServiceTypeLocalWorkerControl, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(grpcPort),
+			Secure:     false,
+		})
+	})
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)
 	}
@@ -153,29 +107,4 @@ func main() {
 func Exitf(message string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, message, args...)
 	os.Exit(1)
-}
-
-func mustFixEndpointPort(serverEndpoint string, port int) string {
-	u, err := url.Parse(serverEndpoint)
-	if err != nil {
-		Exitf("Server endpoint is invalid: %s\n", err)
-	}
-	u.Host = net.JoinHostPort(u.Hostname(), strconv.Itoa(port))
-	return u.String()
-}
-
-// mustResolveDNSName resolves the given hostname in an IP address.
-func mustResolveDNSName(host string) string {
-	if ip := net.ParseIP(host); ip != nil {
-		// Already IP address
-		return host
-	}
-	addrs, err := net.LookupHost(host)
-	if err != nil {
-		Exitf("Failed to lookup host '%s': %v\n", host, err)
-	}
-	if len(addrs) == 0 {
-		Exitf("Lookup of host '%s' yielded no addresses\n", host)
-	}
-	return addrs[0]
 }

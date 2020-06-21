@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/binkynet/BinkyNet/model"
+	model "github.com/binkynet/BinkyNet/apis/v1"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -30,7 +30,7 @@ type registryEntry struct {
 }
 
 // NewRegistry create a new Registry implementation.
-func NewRegistry(ctx context.Context, folder, defaultTopicPrefix string, reconfigureQueue chan string) (Registry, error) {
+func NewRegistry(ctx context.Context, folder string, reconfigureQueue chan string) (Registry, error) {
 	r := &registry{
 		folder:           folder,
 		configs:          make(map[string]registryEntry),
@@ -59,7 +59,7 @@ func (r *registry) Get(id string) (WorkerConfiguration, error) {
 	// Read from disk
 	conf, modTime, err := readWorkerConfiguration(r.folder, id)
 	if err != nil {
-		return WorkerConfiguration{}, maskAny(err)
+		return WorkerConfiguration{}, err
 	}
 
 	fmt.Printf("Read %+v\n", conf)
@@ -114,12 +114,12 @@ func readWorkerConfiguration(folder, id string) (WorkerConfiguration, time.Time,
 	if err == nil {
 		content, err := ioutil.ReadFile(filePath)
 		if err != nil {
-			return WorkerConfiguration{}, time.Time{}, maskAny(err)
+			return WorkerConfiguration{}, time.Time{}, err
 		}
 		// Parse file
 		var conf WorkerConfiguration
 		if err := yaml.Unmarshal(content, &conf.LocalWorkerConfig); err != nil {
-			return WorkerConfiguration{}, time.Time{}, maskAny(err)
+			return WorkerConfiguration{}, time.Time{}, err
 		}
 		return conf, info.ModTime(), nil
 	}
@@ -130,15 +130,15 @@ func readWorkerConfiguration(folder, id string) (WorkerConfiguration, time.Time,
 	if err == nil {
 		content, err := ioutil.ReadFile(filePath)
 		if err != nil {
-			return WorkerConfiguration{}, time.Time{}, maskAny(err)
+			return WorkerConfiguration{}, time.Time{}, err
 		}
 
 		// Parse file
 		var conf WorkerConfiguration
 		if err := json.Unmarshal(content, &conf.LocalWorkerConfig); err != nil {
-			return WorkerConfiguration{}, time.Time{}, maskAny(err)
+			return WorkerConfiguration{}, time.Time{}, err
 		}
 		return conf, info.ModTime(), nil
 	}
-	return WorkerConfiguration{}, time.Time{}, maskAny(err)
+	return WorkerConfiguration{}, time.Time{}, err
 }
