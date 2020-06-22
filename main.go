@@ -92,6 +92,13 @@ func main() {
 	g.Go(func() error { return svc.Run(ctx) })
 	g.Go(func() error { return server.Run(ctx) })
 	g.Go(func() error {
+		return api.RegisterServiceEntry(ctx, api.ServiceTypeLocalWorkerConfig, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(grpcPort),
+			Secure:     false,
+		})
+	})
+	g.Go(func() error {
 		return api.RegisterServiceEntry(ctx, api.ServiceTypeLocalWorkerControl, api.ServiceInfo{
 			ApiVersion: "v1",
 			ApiPort:    int32(grpcPort),

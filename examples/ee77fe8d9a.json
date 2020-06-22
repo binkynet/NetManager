@@ -1,0 +1,74 @@
+{
+  "alias": "macbook",
+  "devices": [
+    {
+      "id": "io1",
+      "address": "0x20",
+      "type": "mcp23017"
+    },
+    {
+      "id": "pwm1",
+      "address": "0x40",
+      "type": "pca9685"
+    }
+  ],
+  "objects": [
+    {
+      "id": "led1",
+      "type": "binary-output",
+      "connections": [
+        {
+          "key": "output",
+          "pins": [{ "device": "io1", "index": 9 }]
+        }
+      ]
+    },
+    {
+      "id": "sensor1",
+      "type": "binary-sensor",
+      "connections": [
+        {
+          "key": "sensor",
+          "pins": [{ "device": "io1", "index": 1 }]
+        }
+      ]
+    },
+    {
+      "id": "relay-switch1",
+      "type": "relay-switch",
+      "connections": [
+        {
+          "key": "straight-relay",
+          "pins": [{ "device": "io1", "index": 10 }]
+        },
+        {
+          "key": "off-relay",
+          "pins": [{ "device": "io1", "index": 11 }]
+        }
+      ]
+    },
+    {
+      "id": "servo-switch1",
+      "type": "servo-switch",
+      "connections": [
+        {
+          "key": "servo",
+          "pins": [{ "device": "pwm1", "index": 1 }],
+          "config": {
+            "straight": "125",
+            "off": "550",
+            "step": "15"
+           }
+        },
+        {
+          "key": "phase-straight-relay",
+          "pins": [{ "device": "io1", "index": 12 }]
+        },
+        {
+          "key": "phase-off-relay",
+          "pins": [{ "device": "io1", "index": 13 }]
+        }
+      ]
+    }
+  ]
+}
