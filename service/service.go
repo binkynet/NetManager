@@ -56,6 +56,7 @@ type service struct {
 	Dependencies
 
 	configChanges *pubsub.PubSub
+	switchPool    *switchPool
 }
 
 // NewService creates a Service instance and returns it.
@@ -64,6 +65,7 @@ func NewService(conf Config, deps Dependencies) (Service, error) {
 		Config:        conf,
 		Dependencies:  deps,
 		configChanges: pubsub.New(),
+		switchPool:    newSwitchPool(),
 	}, nil
 }
 

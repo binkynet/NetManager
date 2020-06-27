@@ -72,13 +72,32 @@ func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutpu
 // GetSwitchRequests is used to get a stream of switch requests from the network
 // master.
 func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.LocalWorkerControlService_GetSwitchRequestsServer) error {
-	return nil // TODO
+	ch, cancel := s.switchPool.SubRequest()
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
 }
 
 // SetSwitchActuals is used to send a stream of actual switch statuses to
 // the network master.
 func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitchActualsServer) error {
-	return nil // TODO
+	for {
+		msg, err := server.Recv()
+		if isStreamClosed(err) {
+			return nil
+		}
+		s.switchPool.SetActual(*msg)
+	}
 }
 
 // GetClock is used to get a stream of switch current time of day from the network
