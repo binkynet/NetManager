@@ -30,13 +30,32 @@ func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empt
 // GetPowerRequests is used to get a stream of power requests from the network
 // master.
 func (s *service) GetPowerRequests(req *api.PowerRequestsOptions, server api.LocalWorkerControlService_GetPowerRequestsServer) error {
-	return nil // TODO
+	ch, cancel := s.powerPool.SubRequest()
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(msg.GetRequest()); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
 }
 
 // SetPowerActuals is used to send a stream of actual power statuses to
 // the network master.
 func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerActualsServer) error {
-	return nil // TODO
+	for {
+		msg, err := server.Recv()
+		if isStreamClosed(err) {
+			return nil
+		}
+		s.powerPool.SetActual(*msg)
+	}
 }
 
 // GetLocRequests is used to get a stream of loc requests from the network
