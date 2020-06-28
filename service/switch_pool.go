@@ -24,19 +24,14 @@ import (
 
 type switchPool struct {
 	mutex          sync.RWMutex
-	entries        map[api.ObjectAddress]*switchPoolEntry
+	entries        map[api.ObjectAddress]*api.Switch
 	requestChanges *pubsub.PubSub
 	actualChanges  *pubsub.PubSub
 }
 
-type switchPoolEntry struct {
-	Request api.Switch
-	Actual  api.Switch
-}
-
 func newSwitchPool() *switchPool {
 	return &switchPool{
-		entries:        make(map[api.ObjectAddress]*switchPoolEntry),
+		entries:        make(map[api.ObjectAddress]*api.Switch),
 		requestChanges: pubsub.New(),
 		actualChanges:  pubsub.New(),
 	}
@@ -48,12 +43,13 @@ func (p *switchPool) SetRequest(x api.Switch) {
 
 	e, found := p.entries[x.Address]
 	if !found {
-		e = &switchPoolEntry{}
+		x.Actual = nil
+		e = x.Clone()
 		p.entries[x.Address] = e
+	} else {
+		e.Request = x.GetRequest().Clone()
 	}
-
-	e.Request = x
-	p.requestChanges.Pub(x)
+	p.requestChanges.Pub(e.Clone())
 }
 
 func (p *switchPool) SetActual(x api.Switch) {
@@ -62,18 +58,18 @@ func (p *switchPool) SetActual(x api.Switch) {
 
 	e, found := p.entries[x.Address]
 	if !found {
-		e = &switchPoolEntry{}
-		p.entries[x.Address] = e
+		// Apparently we do not care for this switch
+		return
+	} else {
+		e.Actual = x.GetActual().Clone()
 	}
-
-	e.Actual = x
-	p.actualChanges.Pub(x)
+	p.actualChanges.Pub(e.Clone())
 }
 
 func (p *switchPool) SubRequest() (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
-	cb := func(msg api.Switch) {
-		c <- msg
+	cb := func(msg *api.Switch) {
+		c <- *msg
 	}
 	p.requestChanges.Sub(cb)
 	return c, func() {
@@ -84,8 +80,8 @@ func (p *switchPool) SubRequest() (chan api.Switch, context.CancelFunc) {
 
 func (p *switchPool) SubActual() (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
-	cb := func(msg api.Switch) {
-		c <- msg
+	cb := func(msg *api.Switch) {
+		c <- *msg
 	}
 	p.actualChanges.Sub(cb)
 	return c, func() {
