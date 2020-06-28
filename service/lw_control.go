@@ -17,6 +17,7 @@ package service
 import (
 	"context"
 
+	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
 )
 
@@ -51,7 +52,7 @@ func (s *service) GetPowerRequests(req *api.PowerRequestsOptions, server api.Loc
 func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerActualsServer) error {
 	for {
 		msg, err := server.Recv()
-		if isStreamClosed(err) {
+		if util.IsStreamClosed(err) {
 			return nil
 		} else if err != nil {
 			return err
@@ -84,7 +85,7 @@ func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWo
 func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActualsServer) error {
 	for {
 		msg, err := server.Recv()
-		if isStreamClosed(err) {
+		if util.IsStreamClosed(err) {
 			return nil
 		} else if err != nil {
 			return err
@@ -98,7 +99,7 @@ func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActua
 func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSensorActualsServer) error {
 	for {
 		msg, err := server.Recv()
-		if isStreamClosed(err) {
+		if util.IsStreamClosed(err) {
 			return nil
 		} else if err != nil {
 			return err
@@ -131,7 +132,7 @@ func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.L
 func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutputActualsServer) error {
 	for {
 		msg, err := server.Recv()
-		if isStreamClosed(err) {
+		if util.IsStreamClosed(err) {
 			return nil
 		} else if err != nil {
 			return err
@@ -164,7 +165,7 @@ func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.L
 func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitchActualsServer) error {
 	for {
 		msg, err := server.Recv()
-		if isStreamClosed(err) {
+		if util.IsStreamClosed(err) {
 			return nil
 		} else if err != nil {
 			return err

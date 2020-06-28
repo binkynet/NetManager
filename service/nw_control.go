@@ -15,6 +15,7 @@
 package service
 
 import (
+	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"golang.org/x/sync/errgroup"
 )
@@ -27,7 +28,7 @@ func (s *service) Power(server api.NetworkControlService_PowerServer) error {
 	g.Go(func() error {
 		for {
 			msg, err := server.Recv()
-			if isStreamClosed(err) {
+			if util.IsStreamClosed(err) {
 				return nil
 			} else if err != nil {
 				return err
@@ -70,7 +71,7 @@ func (s *service) Locs(server api.NetworkControlService_LocsServer) error {
 	g.Go(func() error {
 		for {
 			msg, err := server.Recv()
-			if isStreamClosed(err) {
+			if util.IsStreamClosed(err) {
 				return nil
 			} else if err != nil {
 				return err
@@ -136,7 +137,7 @@ func (s *service) Outputs(server api.NetworkControlService_OutputsServer) error 
 	g.Go(func() error {
 		for {
 			msg, err := server.Recv()
-			if isStreamClosed(err) {
+			if util.IsStreamClosed(err) {
 				return nil
 			} else if err != nil {
 				return err
@@ -179,7 +180,7 @@ func (s *service) Switches(server api.NetworkControlService_SwitchesServer) erro
 	g.Go(func() error {
 		for {
 			msg, err := server.Recv()
-			if isStreamClosed(err) {
+			if util.IsStreamClosed(err) {
 				return nil
 			} else if err != nil {
 				return err
@@ -221,7 +222,7 @@ func (s *service) Clock(server api.NetworkControlService_ClockServer) error {
 	g.Go(func() error {
 		for {
 			msg, err := server.Recv()
-			if isStreamClosed(err) {
+			if util.IsStreamClosed(err) {
 				return nil
 			} else if err != nil {
 				return err
