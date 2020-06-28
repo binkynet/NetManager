@@ -82,14 +82,15 @@ func NewService(conf Config, deps Dependencies) (Service, error) {
 
 // Run the manager until the given context is cancelled.
 func (s *service) Run(ctx context.Context) error {
+	log := s.Log.With().Str("component", "service").Logger()
+	defer func() {
+		log.Debug().Msg("Run finished")
+	}()
 	for {
 		select {
-		/*case msg := <-s.DiscoveryMessages:
-		// Process message
-		go s.processDiscoveryMessage(msg.RemoteHost, msg.RegisterWorkerMessage)
-		*/
 		case id := <-s.ReconfigureQueue:
 			// Reconfigure worker with id
+			log.Info().Str("id", id).Msg("Reconfiguration detected")
 			s.configChanges.Pub(id)
 		case <-ctx.Done():
 			// Context cancalled
@@ -97,142 +98,3 @@ func (s *service) Run(ctx context.Context) error {
 		}
 	}
 }
-
-/*
-// processDiscoveryMessage process the given message.
-// It calls the environment route of the local worker that has registered.
-func (s *service) processDiscoveryMessage(remoteHost string, msg discoveryAPI.RegisterWorkerMessage) {
-	if msg.ID == "" {
-		s.Log.Error().Msg("Received RegisterWorkerMessage with empty ID")
-		return
-	}
-	// Find config
-	_, err := s.ConfigRegistry.Get(msg.ID)
-	if err != nil {
-		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Cannot open worker configuration")
-		return
-	}
-
-	// Store registration
-	reg := workerRegistration{
-		RegisterWorkerMessage: discovery.RegisterWorkerMessage{
-			RegisterWorkerMessage: msg,
-			RemoteHost:            remoteHost,
-		},
-	}
-	s.mutex.Lock()
-	s.workers[msg.ID] = reg
-	s.mutex.Unlock()
-
-	// Build environment message
-	env := discoveryAPI.WorkerEnvironment{
-		RequiredWorkerVersion: s.RequiredWorkerVersion,
-	}
-	env.Mqtt.Host = s.MQTTHost
-	env.Mqtt.Port = s.MQTTPort
-	env.Mqtt.UserName = s.MQTTUserName
-	env.Mqtt.Password = s.MQTTPassword
-	env.Mqtt.TopicPrefix = s.MQTTTopicPrefix
-	env.Manager.Endpoint = s.MyEndpoint
-
-	// Call environment endpoint
-	url := reg.Endpoint("/environment")
-	encodedEnv, err := json.Marshal(env)
-	if err != nil {
-		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Failed to encode environment information")
-		return
-	}
-	if resp, err := http.Post(url, contentTypeJSON, bytes.NewReader(encodedEnv)); err != nil {
-		s.Log.Error().Err(err).Str("id", msg.ID).Msg("Failed call environment endpoint")
-	} else if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Log.Error().Str("id", msg.ID).Int("status", resp.StatusCode).Msg("Unexpected status code from environment call")
-	} else {
-		s.Log.Debug().Str("id", msg.ID).Msg("Call to environment endpoint succeeded")
-	}
-}
-
-// ReconfigureWorker calls the worker to perform a complete reload.
-func (s *service) ReconfigureWorker(ctx context.Context, workerID string) error {
-	s.mutex.Lock()
-	reg, found := s.workers[workerID]
-	s.mutex.Unlock()
-
-	if !found {
-		return maskAny(fmt.Errorf("No such worker: %s", workerID))
-	}
-
-	url := reg.Endpoint("/environment")
-	req, err := http.NewRequest("DELETE", url, nil)
-	if err != nil {
-		return maskAny(err)
-	}
-	lctx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-	req = req.WithContext(lctx)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return maskAny(err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Log.Error().Str("id", workerID).Int("status", resp.StatusCode).Msg("Unexpected status code from DELETE environment call")
-		return maskAny(fmt.Errorf("Unexpected status code %d from DELETE environment call", resp.StatusCode))
-	}
-	s.Log.Debug().Str("id", workerID).Msg("Call to environment endpoint succeeded")
-	return nil
-}
-
-// ShutdownWorker calls the worker to perform a complete reload.
-func (s *service) ShutdownWorker(ctx context.Context, workerID string) error {
-	s.mutex.Lock()
-	reg, found := s.workers[workerID]
-	s.mutex.Unlock()
-
-	if !found {
-		return maskAny(fmt.Errorf("No such worker: %s", workerID))
-	}
-
-	url := reg.Endpoint("/shutdown")
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		return maskAny(err)
-	}
-	lctx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-	req = req.WithContext(lctx)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return maskAny(err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		s.Log.Error().Str("id", workerID).Int("status", resp.StatusCode).Msg("Unexpected status code from POST shutdown call")
-		return maskAny(fmt.Errorf("Unexpected status code %d from POST shutdown call", resp.StatusCode))
-	}
-	s.Log.Debug().Str("id", workerID).Msg("Call to environment endpoint succeeded")
-	return nil
-}
-
-// Get the configuration for a specific local worker
-func (s *service) GetWorkerConfig(ctx context.Context, workerID string) (model.LocalWorkerConfig, error) {
-	conf, err := s.ConfigRegistry.Get(workerID)
-	if err != nil {
-		s.Log.Error().Err(err).Str("id", workerID).Msg("Cannot open worker configuration")
-		return model.LocalWorkerConfig{}, maskAny(err)
-	}
-	return conf.LocalWorkerConfig, nil
-}
-
-// GetWorkers returns a list of registered workers
-func (s *service) GetWorkers(ctx context.Context) ([]client.WorkerInfo, error) {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-
-	result := make([]client.WorkerInfo, 0, len(s.workers))
-	for id, reg := range s.workers {
-		result = append(result, client.WorkerInfo{
-			ID:       id,
-			Endpoint: reg.Endpoint("/"),
-		})
-	}
-	return result, nil
-}
-*/
