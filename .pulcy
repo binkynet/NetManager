@@ -1,0 +1,5 @@
+{
+	"image": "netmanager",
+	"registry": "binkynet/",
+	"tag-latest": true
+}
