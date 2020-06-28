@@ -35,6 +35,7 @@ type Service interface {
 
 	model.LocalWorkerConfigServiceServer
 	model.LocalWorkerControlServiceServer
+	model.NetworkControlServiceServer
 }
 
 type Config struct {

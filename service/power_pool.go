@@ -40,11 +40,11 @@ func newPowerPool() *powerPool {
 	}
 }
 
-func (p *powerPool) SetRequest(x api.Power) {
+func (p *powerPool) SetRequest(x api.PowerState) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.power.Request.Enabled = x.GetRequest().GetEnabled()
+	p.power.Request.Enabled = x.GetEnabled()
 	p.requestChanges.Pub(p.power.Clone())
 }
 

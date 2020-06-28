@@ -105,6 +105,13 @@ func main() {
 			Secure:     false,
 		})
 	})
+	g.Go(func() error {
+		return api.RegisterServiceEntry(ctx, api.ServiceTypeNetworkControl, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(grpcPort),
+			Secure:     false,
+		})
+	})
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)
 	}

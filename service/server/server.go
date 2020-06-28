@@ -24,6 +24,7 @@ type Server interface {
 type Service interface {
 	api.LocalWorkerConfigServiceServer
 	api.LocalWorkerControlServiceServer
+	api.NetworkControlServiceServer
 }
 
 type Config struct {
@@ -74,6 +75,7 @@ func (s *server) Run(ctx context.Context) error {
 	)
 	api.RegisterLocalWorkerConfigServiceServer(grpcSrv, s.api)
 	api.RegisterLocalWorkerControlServiceServer(grpcSrv, s.api)
+	api.RegisterNetworkControlServiceServer(grpcSrv, s.api)
 	// Register reflection service on gRPC server.
 	reflection.Register(grpcSrv)
 
