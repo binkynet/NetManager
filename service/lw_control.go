@@ -53,6 +53,8 @@ func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerA
 		msg, err := server.Recv()
 		if isStreamClosed(err) {
 			return nil
+		} else if err != nil {
+			return err
 		}
 		s.powerPool.SetActual(*msg)
 	}
@@ -61,31 +63,81 @@ func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerA
 // GetLocRequests is used to get a stream of loc requests from the network
 // master.
 func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWorkerControlService_GetLocRequestsServer) error {
-	return nil // TODO
+	ch, cancel := s.locPool.SubRequest()
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
 }
 
 // SetLocActuals is used to send a stream of actual loc statuses to
 // the network master.
 func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActualsServer) error {
-	return nil // TODO
+	for {
+		msg, err := server.Recv()
+		if isStreamClosed(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		s.locPool.SetActual(*msg)
+	}
 }
 
 // SetSensorActuals is used to send a stream of actual sensor statuses to
 // the network master.
 func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSensorActualsServer) error {
-	return nil // TODO
+	for {
+		msg, err := server.Recv()
+		if isStreamClosed(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		s.sensorPool.SetActual(*msg)
+	}
 }
 
 // GetOutputRequests is used to get a stream of output requests from the network
 // master.
 func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.LocalWorkerControlService_GetOutputRequestsServer) error {
-	return nil // TODO
+	ch, cancel := s.outputPool.SubRequest()
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
 }
 
 // SetOutputActuals is used to send a stream of actual output statuses to
 // the network master.
 func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutputActualsServer) error {
-	return nil // TODO
+	for {
+		msg, err := server.Recv()
+		if isStreamClosed(err) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		s.outputPool.SetActual(*msg)
+	}
 }
 
 // GetSwitchRequests is used to get a stream of switch requests from the network
@@ -114,6 +166,8 @@ func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitc
 		msg, err := server.Recv()
 		if isStreamClosed(err) {
 			return nil
+		} else if err != nil {
+			return err
 		}
 		s.switchPool.SetActual(*msg)
 	}
@@ -122,5 +176,18 @@ func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitc
 // GetClock is used to get a stream of switch current time of day from the network
 // master.
 func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_GetClockServer) error {
-	return nil // TODO
+	ch, cancel := s.clockPool.SubActual()
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
 }
