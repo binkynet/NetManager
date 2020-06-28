@@ -3,16 +3,16 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
-	"io/ioutil"
+	"log"
 	"net"
-	"net/http"
 	"strconv"
 
-	"github.com/binkynet/NetManager/client"
-	"github.com/julienschmidt/httprouter"
-	restkit "github.com/pulcy/rest-kit"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
+
+	api "github.com/binkynet/BinkyNet/apis/v1"
 )
 
 type Server interface {
@@ -20,9 +20,16 @@ type Server interface {
 	Run(ctx context.Context) error
 }
 
+// Service ('s) that we offer
+type Service interface {
+	api.LocalWorkerConfigServiceServer
+	api.LocalWorkerControlServiceServer
+	api.NetworkControlServiceServer
+}
+
 type Config struct {
-	Host string
-	Port int
+	Host     string
+	GRPCPort int
 }
 
 func (c Config) createTLSConfig() (*tls.Config, error) {
@@ -30,7 +37,7 @@ func (c Config) createTLSConfig() (*tls.Config, error) {
 }
 
 // NewServer creates a new server
-func NewServer(conf Config, api client.API, log zerolog.Logger) (Server, error) {
+func NewServer(conf Config, api Service, log zerolog.Logger) (Server, error) {
 	return &server{
 		Config:     conf,
 		log:        log.With().Str("component", "server").Logger(),
@@ -43,84 +50,45 @@ type server struct {
 	Config
 	log        zerolog.Logger
 	requestLog zerolog.Logger
-	api        client.API
+	api        Service
 }
 
 // Run the HTTP server until the given context is cancelled.
 func (s *server) Run(ctx context.Context) error {
-	mux := httprouter.New()
-	mux.NotFound = http.HandlerFunc(s.notFound)
-	mux.GET("/worker", s.handleGetWorkers)
-	mux.GET("/worker/:id/config", s.handleGetWorkerConfig)
-
-	addr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: mux,
-	}
-
-	tlsConfig, err := s.Config.createTLSConfig()
+	// Create TLS config
+	/*tlsConfig, err := s.Config.createTLSConfig()
 	if err != nil {
-		return maskAny(err)
+		return err
+	}*/
+
+	// Prepare GRPC listener
+	grpcAddr := net.JoinHostPort(s.Host, strconv.Itoa(s.GRPCPort))
+	grpcLis, err := net.Listen("tcp", grpcAddr)
+	if err != nil {
+		log.Fatalf("failed to listen on address %s: %v", grpcAddr, err)
 	}
 
-	serverErrors := make(chan error)
+	// Prepare GRPC server
+	grpcSrv := grpc.NewServer(
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
+	)
+	api.RegisterLocalWorkerConfigServiceServer(grpcSrv, s.api)
+	api.RegisterLocalWorkerControlServiceServer(grpcSrv, s.api)
+	api.RegisterNetworkControlServiceServer(grpcSrv, s.api)
+	// Register reflection service on gRPC server.
+	reflection.Register(grpcSrv)
+
 	go func() {
-		defer close(serverErrors)
-		if tlsConfig != nil {
-			s.log.Info().Msgf("Listening on %s using TLS", addr)
-			httpServer.TLSConfig = tlsConfig
-			tlsConfig.BuildNameToCertificate()
-			if err := httpServer.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-				serverErrors <- maskAny(err)
-			}
-		} else {
-			s.log.Info().Msgf("Listening on %s", addr)
-			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				serverErrors <- maskAny(err)
-			}
+		if err := grpcSrv.Serve(grpcLis); err != nil {
+			log.Fatalf("failed to serve GRPC: %v", err)
 		}
 	}()
-
 	select {
-	case err := <-serverErrors:
-		return maskAny(err)
 	case <-ctx.Done():
 		// Close server
 		s.log.Debug().Msg("Closing server...")
-		httpServer.Close()
+		grpcSrv.GracefulStop()
 		return nil
 	}
-}
-
-func handleError(w http.ResponseWriter, err error) {
-	errResp := restkit.NewErrorResponseFromError(err)
-	sendJSON(w, errResp.HTTPStatusCode(), errResp)
-}
-
-func parseBody(r *http.Request, data interface{}) error {
-	defer r.Body.Close()
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return maskAny(err)
-	}
-	if err := json.Unmarshal(body, data); err != nil {
-		return maskAny(restkit.BadRequestError(err.Error(), 0))
-	}
-	return nil
-}
-
-// sendJSON encodes given body as JSON and sends it to the given writer with given HTTP status.
-func sendJSON(w http.ResponseWriter, status int, body interface{}) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if body == nil {
-		w.Write([]byte("{}"))
-	} else {
-		encoder := json.NewEncoder(w)
-		if err := encoder.Encode(body); err != nil {
-			return maskAny(err)
-		}
-	}
-	return nil
 }
