@@ -33,15 +33,15 @@ func (s *service) Power(server api.NetworkControlService_PowerServer) error {
 			} else if err != nil {
 				return err
 			}
-			s.powerPool.SetRequest(*msg)
+			s.Manager.SetPowerRequest(*msg)
 		}
 	})
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.powerPool.SubActual()
+		ach, acancel := s.Manager.SubscribePowerActuals()
 		defer acancel()
-		rch, rcancel := s.powerPool.SubRequest()
+		rch, rcancel := s.Manager.SubscribePowerRequests()
 		defer rcancel()
 		for {
 			select {
@@ -76,15 +76,15 @@ func (s *service) Locs(server api.NetworkControlService_LocsServer) error {
 			} else if err != nil {
 				return err
 			}
-			s.locPool.SetRequest(*msg)
+			s.Manager.SetLocRequest(*msg)
 		}
 	})
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.locPool.SubActual()
+		ach, acancel := s.Manager.SubscribeLocActuals()
 		defer acancel()
-		rch, rcancel := s.locPool.SubRequest()
+		rch, rcancel := s.Manager.SubscribeLocRequests()
 		defer rcancel()
 		for {
 			select {
@@ -111,7 +111,7 @@ func (s *service) Sensors(req *api.Empty, server api.NetworkControlService_Senso
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.sensorPool.SubActual()
+		ach, acancel := s.Manager.SubscribeSensorActuals()
 		defer acancel()
 		for {
 			select {
@@ -142,15 +142,15 @@ func (s *service) Outputs(server api.NetworkControlService_OutputsServer) error 
 			} else if err != nil {
 				return err
 			}
-			s.outputPool.SetRequest(*msg)
+			s.Manager.SetOutputRequest(*msg)
 		}
 	})
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.outputPool.SubActual()
+		ach, acancel := s.Manager.SubscribeOutputActuals()
 		defer acancel()
-		rch, rcancel := s.outputPool.SubRequest()
+		rch, rcancel := s.Manager.SubscribeOutputRequests()
 		defer rcancel()
 		for {
 			select {
@@ -185,15 +185,15 @@ func (s *service) Switches(server api.NetworkControlService_SwitchesServer) erro
 			} else if err != nil {
 				return err
 			}
-			s.switchPool.SetRequest(*msg)
+			s.Manager.SetSwitchRequest(*msg)
 		}
 	})
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.switchPool.SubActual()
+		ach, acancel := s.Manager.SubscribeSwitchActuals()
 		defer acancel()
-		rch, rcancel := s.switchPool.SubRequest()
+		rch, rcancel := s.Manager.SubscribeSwitchRequests()
 		defer rcancel()
 		for {
 			select {
@@ -227,13 +227,13 @@ func (s *service) Clock(server api.NetworkControlService_ClockServer) error {
 			} else if err != nil {
 				return err
 			}
-			s.clockPool.SetActual(*msg)
+			s.Manager.SetClockActual(*msg)
 		}
 	})
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.clockPool.SubActual()
+		ach, acancel := s.Manager.SubscribeClockActuals()
 		defer acancel()
 		for {
 			select {

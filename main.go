@@ -28,6 +28,7 @@ import (
 
 	"github.com/binkynet/NetManager/service"
 	"github.com/binkynet/NetManager/service/config"
+	"github.com/binkynet/NetManager/service/manager"
 	"github.com/binkynet/NetManager/service/server"
 )
 
@@ -62,23 +63,36 @@ func main() {
 	}, cancel)
 	go t.ListenSignals()
 
+	// Prepare local worker registry
 	reconfigureQueue := make(chan string, 64)
 	configReg, err := config.NewFileRegistry(ctx, registryFolder, reconfigureQueue)
 	if err != nil {
 		Exitf("Failed to initialize worker configuration registry: %v\n", err)
 	}
 
-	svc, err := service.NewService(service.Config{
-		RequiredWorkerVersion: "",
-	}, service.Dependencies{
+	// Prepare manager core
+	mgr, err := manager.New(manager.Dependencies{
 		Log:              logger,
 		ConfigRegistry:   configReg,
 		ReconfigureQueue: reconfigureQueue,
 	})
 	if err != nil {
+		Exitf("Failed to initialize Manager core: %v\n", err)
+	}
+
+	// Prepare GRPC service implementation
+	svc, err := service.NewService(service.Config{
+		RequiredWorkerVersion: "",
+	}, service.Dependencies{
+		Log:            logger,
+		ConfigRegistry: configReg,
+		Manager:        mgr,
+	})
+	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)
 	}
 
+	// Prepare network server
 	server, err := server.NewServer(server.Config{
 		Host:     serverHost,
 		GRPCPort: grpcPort,
@@ -90,7 +104,7 @@ func main() {
 	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
 	g, ctx := errgroup.WithContext(ctx)
 	ctx = api.WithServiceInfoHost(ctx, serverHost)
-	g.Go(func() error { return svc.Run(ctx) })
+	g.Go(func() error { return mgr.Run(ctx) })
 	g.Go(func() error { return server.Run(ctx) })
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)

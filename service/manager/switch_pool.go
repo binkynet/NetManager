@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-package service
+package manager
 
 import (
 	"context"
@@ -22,43 +22,53 @@ import (
 	"github.com/mattn/go-pubsub"
 )
 
-type powerPool struct {
+type switchPool struct {
 	mutex          sync.RWMutex
-	power          api.Power
+	entries        map[api.ObjectAddress]*api.Switch
 	requestChanges *pubsub.PubSub
 	actualChanges  *pubsub.PubSub
 }
 
-func newPowerPool() *powerPool {
-	return &powerPool{
-		power: api.Power{
-			Request: &api.PowerState{},
-			Actual:  &api.PowerState{},
-		},
+func newSwitchPool() *switchPool {
+	return &switchPool{
+		entries:        make(map[api.ObjectAddress]*api.Switch),
 		requestChanges: pubsub.New(),
 		actualChanges:  pubsub.New(),
 	}
 }
 
-func (p *powerPool) SetRequest(x api.PowerState) {
+func (p *switchPool) SetRequest(x api.Switch) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.power.Request.Enabled = x.GetEnabled()
-	p.requestChanges.Pub(p.power.Clone())
+	e, found := p.entries[x.Address]
+	if !found {
+		x.Actual = nil
+		e = x.Clone()
+		p.entries[x.Address] = e
+	} else {
+		e.Request = x.GetRequest().Clone()
+	}
+	p.requestChanges.Pub(e.Clone())
 }
 
-func (p *powerPool) SetActual(x api.PowerState) {
+func (p *switchPool) SetActual(x api.Switch) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.power.Actual.Enabled = x.GetEnabled()
-	p.actualChanges.Pub(p.power.Clone())
+	e, found := p.entries[x.Address]
+	if !found {
+		// Apparently we do not care for this switch
+		return
+	} else {
+		e.Actual = x.GetActual().Clone()
+	}
+	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *powerPool) SubRequest() (chan api.Power, context.CancelFunc) {
-	c := make(chan api.Power)
-	cb := func(msg *api.Power) {
+func (p *switchPool) SubRequest() (chan api.Switch, context.CancelFunc) {
+	c := make(chan api.Switch)
+	cb := func(msg *api.Switch) {
 		c <- *msg
 	}
 	p.requestChanges.Sub(cb)
@@ -68,9 +78,9 @@ func (p *powerPool) SubRequest() (chan api.Power, context.CancelFunc) {
 	}
 }
 
-func (p *powerPool) SubActual() (chan api.Power, context.CancelFunc) {
-	c := make(chan api.Power)
-	cb := func(msg *api.Power) {
+func (p *switchPool) SubActual() (chan api.Switch, context.CancelFunc) {
+	c := make(chan api.Switch)
+	cb := func(msg *api.Switch) {
 		c <- *msg
 	}
 	p.actualChanges.Sub(cb)

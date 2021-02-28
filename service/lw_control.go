@@ -31,7 +31,7 @@ func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empt
 // GetPowerRequests is used to get a stream of power requests from the network
 // master.
 func (s *service) GetPowerRequests(req *api.PowerRequestsOptions, server api.LocalWorkerControlService_GetPowerRequestsServer) error {
-	ch, cancel := s.powerPool.SubRequest()
+	ch, cancel := s.Manager.SubscribePowerRequests()
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -57,14 +57,14 @@ func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerA
 		} else if err != nil {
 			return err
 		}
-		s.powerPool.SetActual(*msg)
+		s.Manager.SetPowerActual(*msg)
 	}
 }
 
 // GetLocRequests is used to get a stream of loc requests from the network
 // master.
 func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWorkerControlService_GetLocRequestsServer) error {
-	ch, cancel := s.locPool.SubRequest()
+	ch, cancel := s.Manager.SubscribeLocRequests()
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -90,7 +90,7 @@ func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActua
 		} else if err != nil {
 			return err
 		}
-		s.locPool.SetActual(*msg)
+		s.Manager.SetLocActual(*msg)
 	}
 }
 
@@ -104,14 +104,14 @@ func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSenso
 		} else if err != nil {
 			return err
 		}
-		s.sensorPool.SetActual(*msg)
+		s.Manager.SetSensorActual(*msg)
 	}
 }
 
 // GetOutputRequests is used to get a stream of output requests from the network
 // master.
 func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.LocalWorkerControlService_GetOutputRequestsServer) error {
-	ch, cancel := s.outputPool.SubRequest()
+	ch, cancel := s.Manager.SubscribeOutputRequests()
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -137,14 +137,14 @@ func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutpu
 		} else if err != nil {
 			return err
 		}
-		s.outputPool.SetActual(*msg)
+		s.Manager.SetOutputActual(*msg)
 	}
 }
 
 // GetSwitchRequests is used to get a stream of switch requests from the network
 // master.
 func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.LocalWorkerControlService_GetSwitchRequestsServer) error {
-	ch, cancel := s.switchPool.SubRequest()
+	ch, cancel := s.Manager.SubscribeSwitchRequests()
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -170,14 +170,14 @@ func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitc
 		} else if err != nil {
 			return err
 		}
-		s.switchPool.SetActual(*msg)
+		s.Manager.SetSwitchActual(*msg)
 	}
 }
 
 // GetClock is used to get a stream of switch current time of day from the network
 // master.
 func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_GetClockServer) error {
-	ch, cancel := s.clockPool.SubActual()
+	ch, cancel := s.Manager.SubscribeClockActuals()
 	defer cancel()
 	ctx := server.Context()
 	for {

@@ -15,13 +15,12 @@
 package service
 
 import (
-	"context"
-
 	model "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 
 	"github.com/binkynet/NetManager/service/config"
+	"github.com/binkynet/NetManager/service/manager"
 )
 
 const (
@@ -30,9 +29,6 @@ const (
 
 // Service is the API exposed by this service.
 type Service interface {
-	// Run the manager until the given context is cancelled.
-	Run(ctx context.Context) error
-
 	model.LocalWorkerConfigServiceServer
 	model.LocalWorkerControlServiceServer
 	model.NetworkControlServiceServer
@@ -48,8 +44,8 @@ type Config struct {
 type Dependencies struct {
 	Log zerolog.Logger
 
-	ConfigRegistry   config.Registry
-	ReconfigureQueue <-chan string
+	Manager        manager.Manager
+	ConfigRegistry config.Registry
 }
 
 type service struct {
@@ -57,12 +53,6 @@ type service struct {
 	Dependencies
 
 	configChanges *pubsub.PubSub
-	powerPool     *powerPool
-	locPool       *locPool
-	outputPool    *outputPool
-	sensorPool    *sensorPool
-	switchPool    *switchPool
-	clockPool     *clockPool
 }
 
 // NewService creates a Service instance and returns it.
@@ -71,30 +61,5 @@ func NewService(conf Config, deps Dependencies) (Service, error) {
 		Config:        conf,
 		Dependencies:  deps,
 		configChanges: pubsub.New(),
-		powerPool:     newPowerPool(),
-		locPool:       newLocPool(),
-		outputPool:    newOutputPool(),
-		sensorPool:    newSensorPool(),
-		switchPool:    newSwitchPool(),
-		clockPool:     newClockPool(),
 	}, nil
-}
-
-// Run the manager until the given context is cancelled.
-func (s *service) Run(ctx context.Context) error {
-	log := s.Log.With().Str("component", "service").Logger()
-	defer func() {
-		log.Debug().Msg("Run finished")
-	}()
-	for {
-		select {
-		case id := <-s.ReconfigureQueue:
-			// Reconfigure worker with id
-			log.Info().Str("id", id).Msg("Reconfiguration detected")
-			s.configChanges.Pub(id)
-		case <-ctx.Done():
-			// Context cancalled
-			return nil
-		}
-	}
 }
