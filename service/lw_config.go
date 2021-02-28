@@ -21,10 +21,12 @@ import (
 // GetConfig is used to fetch the configuration for a local worker.
 func (s *service) GetConfig(req *api.LocalWorkerInfo, server api.LocalWorkerConfigService_GetConfigServer) error {
 	id := req.GetId()
+	log := s.Log.With().Str("id", id).Logger()
 	if id == "" {
 		return api.InvalidArgument("Id missing")
 	}
 	ctx := server.Context()
+	log.Debug().Msg("GetConfig")
 
 	// Subscribe to config changes
 	configChanged := make(chan struct{})
@@ -44,7 +46,9 @@ func (s *service) GetConfig(req *api.LocalWorkerInfo, server api.LocalWorkerConf
 			return api.NotFound("Failed to get configuration for '%s': %s", id, err.Error())
 		}
 		// Send config
-		if err := server.Send(&cfg.LocalWorkerConfig); err != nil {
+		log.Debug().Msg("Sending config...")
+		if err := server.Send(&cfg); err != nil {
+			log.Debug().Err(err).Msg("Send(config) failed")
 			return err
 		}
 		select {

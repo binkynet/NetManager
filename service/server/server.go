@@ -9,6 +9,7 @@ import (
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
@@ -79,16 +80,54 @@ func (s *server) Run(ctx context.Context) error {
 	// Register reflection service on gRPC server.
 	reflection.Register(grpcSrv)
 
-	go func() {
+	nctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	g, nctx := errgroup.WithContext(nctx)
+	g.Go(func() error {
 		if err := grpcSrv.Serve(grpcLis); err != nil {
-			log.Fatalf("failed to serve GRPC: %v", err)
+			s.log.Warn().Err(err).Msg("failed to serve GRPC")
+			return err
 		}
-	}()
-	select {
-	case <-ctx.Done():
+		return nil
+	})
+	g.Go(func() error {
+		return api.RegisterServiceEntry(nctx, api.ServiceTypeLocalWorkerConfig, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(s.GRPCPort),
+			Secure:     false,
+		})
+	})
+	g.Go(func() error {
+		return api.RegisterServiceEntry(nctx, api.ServiceTypeLocalWorkerControl, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(s.GRPCPort),
+			Secure:     false,
+		})
+	})
+	g.Go(func() error {
+		return api.RegisterServiceEntry(nctx, api.ServiceTypeNetworkControl, api.ServiceInfo{
+			ApiVersion: "v1",
+			ApiPort:    int32(s.GRPCPort),
+			Secure:     false,
+		})
+	})
+	g.Go(func() error {
+		// Wait for content cancellation
+		select {
+		case <-ctx.Done():
+			// Stop
+		case <-nctx.Done():
+			// Stop
+		}
 		// Close server
 		s.log.Debug().Msg("Closing server...")
 		grpcSrv.GracefulStop()
+		cancel()
 		return nil
+	})
+	if err := g.Wait(); err != nil {
+		s.log.Debug().Err(err).Msg("Wait failed")
+		return err
 	}
+	return nil
 }

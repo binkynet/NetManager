@@ -63,7 +63,7 @@ func main() {
 	go t.ListenSignals()
 
 	reconfigureQueue := make(chan string, 64)
-	configReg, err := config.NewRegistry(ctx, registryFolder, reconfigureQueue)
+	configReg, err := config.NewFileRegistry(ctx, registryFolder, reconfigureQueue)
 	if err != nil {
 		Exitf("Failed to initialize worker configuration registry: %v\n", err)
 	}
@@ -89,29 +89,9 @@ func main() {
 
 	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
 	g, ctx := errgroup.WithContext(ctx)
+	ctx = api.WithServiceInfoHost(ctx, serverHost)
 	g.Go(func() error { return svc.Run(ctx) })
 	g.Go(func() error { return server.Run(ctx) })
-	g.Go(func() error {
-		return api.RegisterServiceEntry(ctx, api.ServiceTypeLocalWorkerConfig, api.ServiceInfo{
-			ApiVersion: "v1",
-			ApiPort:    int32(grpcPort),
-			Secure:     false,
-		})
-	})
-	g.Go(func() error {
-		return api.RegisterServiceEntry(ctx, api.ServiceTypeLocalWorkerControl, api.ServiceInfo{
-			ApiVersion: "v1",
-			ApiPort:    int32(grpcPort),
-			Secure:     false,
-		})
-	})
-	g.Go(func() error {
-		return api.RegisterServiceEntry(ctx, api.ServiceTypeNetworkControl, api.ServiceInfo{
-			ApiVersion: "v1",
-			ApiPort:    int32(grpcPort),
-			Secure:     false,
-		})
-	})
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)
 	}
