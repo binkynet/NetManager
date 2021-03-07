@@ -16,6 +16,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
@@ -26,6 +27,37 @@ import (
 // versions.
 func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empty, error) {
 	return &api.Empty{}, nil // TODO
+}
+
+// GetDiscoverRequests is used to allow the netmanager to request a discovery by
+// the local worker.
+// The local worker in turn responds with a SetDiscoverResult call.
+func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.LocalWorkerControlService_GetDiscoverRequestsServer) error {
+	ch, cancel := s.Manager.SubscribeDiscoverRequests(req.GetId())
+	defer cancel()
+	ctx := server.Context()
+	for {
+		select {
+		case msg := <-ch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
+}
+
+// SetDiscoverResult is called by the local worker in response to discover requests.
+func (s *service) SetDiscoverResult(ctx context.Context, req *api.DiscoverResult) (*api.Empty, error) {
+	if req == nil {
+		return nil, fmt.Errorf("Missing result")
+	}
+	if err := s.Manager.SetDiscoverResult(ctx, *req); err != nil {
+		return nil, err
+	}
+	return &api.Empty{}, nil
 }
 
 // GetPowerRequests is used to get a stream of power requests from the network

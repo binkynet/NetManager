@@ -28,6 +28,13 @@ type Manager interface {
 	// Run the manager until the given context is cancelled.
 	Run(ctx context.Context) error
 
+	// Trigger a discovery and wait for the response.
+	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
+	// Subscribe to power requests
+	SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc)
+	// SetDiscoverResult is called by the local worker in response to discover requests.
+	SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error
+
 	// Set the requested power state
 	SetPowerRequest(x api.PowerState)
 	// Set the actual power state
@@ -92,6 +99,7 @@ func New(deps Dependencies) (Manager, error) {
 	return &manager{
 		Dependencies:  deps,
 		configChanges: pubsub.New(),
+		discoverPool:  newDiscoverPool(),
 		powerPool:     newPowerPool(),
 		locPool:       newLocPool(),
 		outputPool:    newOutputPool(),
@@ -107,6 +115,7 @@ type manager struct {
 	Dependencies
 
 	configChanges *pubsub.PubSub
+	discoverPool  *discoverPool
 	powerPool     *powerPool
 	locPool       *locPool
 	outputPool    *outputPool
@@ -132,6 +141,21 @@ func (m *manager) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// Trigger a discovery and wait for the response.
+func (m *manager) Discover(ctx context.Context, id string) (*api.DiscoverResult, error) {
+	return m.discoverPool.Trigger(ctx, id)
+}
+
+// Subscribe to power requests
+func (m *manager) SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc) {
+	return m.discoverPool.SubRequest(id)
+}
+
+// SetDiscoverResult is called by the local worker in response to discover requests.
+func (m *manager) SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error {
+	return m.discoverPool.SetDiscoverResult(req)
 }
 
 // Set the requested power state
