@@ -34,11 +34,14 @@ func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empt
 // The local worker in turn responds with a SetDiscoverResult call.
 func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.LocalWorkerControlService_GetDiscoverRequestsServer) error {
 	ch, cancel := s.Manager.SubscribeDiscoverRequests(req.GetId())
+	log := s.Log.With().Str("id", req.GetId()).Logger()
+	log.Debug().Msg("GetDiscoverRequests...")
 	defer cancel()
 	ctx := server.Context()
 	for {
 		select {
 		case msg := <-ch:
+			log.Debug().Msg("Sending DiscoverRequest...")
 			if err := server.Send(&msg); err != nil {
 				return err
 			}
@@ -51,6 +54,10 @@ func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.Local
 
 // SetDiscoverResult is called by the local worker in response to discover requests.
 func (s *service) SetDiscoverResult(ctx context.Context, req *api.DiscoverResult) (*api.Empty, error) {
+	s.Log.Debug().
+		Strs("addrs", req.GetAddresses()).
+		Str("id", req.GetId()).
+		Msg("SetDiscoverResult...")
 	if req == nil {
 		return nil, fmt.Errorf("Missing result")
 	}
