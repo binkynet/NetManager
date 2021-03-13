@@ -47,6 +47,7 @@ func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.Local
 			}
 		case <-ctx.Done():
 			// Context canceled
+			log.Debug().Msg("Canceling DiscoverRequest...")
 			return nil
 		}
 	}
