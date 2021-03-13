@@ -20,17 +20,20 @@ import (
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type discoverPool struct {
+	log       zerolog.Logger
 	mutex     sync.RWMutex
 	clock     api.Clock
 	requests  *pubsub.PubSub
 	responses *pubsub.PubSub
 }
 
-func newDiscoverPool() *discoverPool {
+func newDiscoverPool(log zerolog.Logger) *discoverPool {
 	return &discoverPool{
+		log:       log,
 		requests:  pubsub.New(),
 		responses: pubsub.New(),
 	}
@@ -47,12 +50,14 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 	defer cancel()
 
 	// Trigger discover
+	p.log.Debug().Msg("discoverPool.Pub")
 	p.requests.Pub(&discoverRequest{id: id})
 
 	// Wait for response
 	for {
 		select {
 		case msg := <-resultChan:
+			p.log.Debug().Str("id", msg.GetId()).Msg("Received result")
 			if msg.GetId() == id {
 				return &msg, nil
 			}

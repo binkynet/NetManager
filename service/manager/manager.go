@@ -99,7 +99,7 @@ func New(deps Dependencies) (Manager, error) {
 	return &manager{
 		Dependencies:  deps,
 		configChanges: pubsub.New(),
-		discoverPool:  newDiscoverPool(),
+		discoverPool:  newDiscoverPool(deps.Log),
 		powerPool:     newPowerPool(),
 		locPool:       newLocPool(),
 		outputPool:    newOutputPool(),
@@ -145,6 +145,7 @@ func (m *manager) Run(ctx context.Context) error {
 
 // Trigger a discovery and wait for the response.
 func (m *manager) Discover(ctx context.Context, id string) (*api.DiscoverResult, error) {
+	m.Log.Debug().Msg("manager.Discover")
 	return m.discoverPool.Trigger(ctx, id)
 }
 
