@@ -58,6 +58,7 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 			}
 		case <-ctx.Done():
 			// Context canceled
+			return nil, ctx.Err()
 		}
 	}
 }
