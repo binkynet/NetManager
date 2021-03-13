@@ -50,7 +50,7 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 	defer cancel()
 
 	// Trigger discover
-	p.log.Debug().Msg("discoverPool.Pub")
+	p.log.Debug().Str("id", id).Msg("discoverPool.Pub")
 	p.requests.Pub(&discoverRequest{id: id})
 
 	// Wait for response
@@ -74,6 +74,8 @@ func (p *discoverPool) SubRequest(id string) (chan api.DiscoverRequest, context.
 	cb := func(msg *discoverRequest) {
 		if msg.id == id {
 			c <- api.DiscoverRequest{}
+		} else {
+			p.log.Debug().Str("msg_id", msg.id).Msg("Skipping message for other localworker")
 		}
 	}
 	p.requests.Sub(cb)
