@@ -28,6 +28,15 @@ type Manager interface {
 	// Run the manager until the given context is cancelled.
 	Run(ctx context.Context) error
 
+	// GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
+	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, bool)
+	// GetAllLocalWorkers fetches the last known info for all local workers.
+	GetAllLocalWorkers() []api.LocalWorkerInfo
+	// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
+	SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc)
+	// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
+	SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo)
+
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
 	// Subscribe to power requests
@@ -97,15 +106,16 @@ type Dependencies struct {
 // New creates a new Manager.
 func New(deps Dependencies) (Manager, error) {
 	return &manager{
-		Dependencies:  deps,
-		configChanges: pubsub.New(),
-		discoverPool:  newDiscoverPool(deps.Log),
-		powerPool:     newPowerPool(),
-		locPool:       newLocPool(),
-		outputPool:    newOutputPool(),
-		sensorPool:    newSensorPool(),
-		switchPool:    newSwitchPool(),
-		clockPool:     newClockPool(),
+		Dependencies:    deps,
+		configChanges:   pubsub.New(),
+		discoverPool:    newDiscoverPool(deps.Log),
+		powerPool:       newPowerPool(),
+		locPool:         newLocPool(),
+		outputPool:      newOutputPool(),
+		sensorPool:      newSensorPool(),
+		switchPool:      newSwitchPool(),
+		clockPool:       newClockPool(),
+		localWorkerPool: newLocalWorkerPool(deps.Log),
 	}, nil
 
 }
@@ -114,14 +124,15 @@ func New(deps Dependencies) (Manager, error) {
 type manager struct {
 	Dependencies
 
-	configChanges *pubsub.PubSub
-	discoverPool  *discoverPool
-	powerPool     *powerPool
-	locPool       *locPool
-	outputPool    *outputPool
-	sensorPool    *sensorPool
-	switchPool    *switchPool
-	clockPool     *clockPool
+	configChanges   *pubsub.PubSub
+	discoverPool    *discoverPool
+	powerPool       *powerPool
+	locPool         *locPool
+	outputPool      *outputPool
+	sensorPool      *sensorPool
+	switchPool      *switchPool
+	clockPool       *clockPool
+	localWorkerPool *localWorkerPool
 }
 
 // Run the manager until the given context is cancelled.
@@ -141,6 +152,26 @@ func (m *manager) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
+func (m *manager) GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, bool) {
+	return m.localWorkerPool.GetInfo(id)
+}
+
+// GetAllLocalWorkers fetches the last known info for all local workers.
+func (m *manager) GetAllLocalWorkers() []api.LocalWorkerInfo {
+	return m.localWorkerPool.GetAll()
+}
+
+// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
+func (m *manager) SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc) {
+	return m.localWorkerPool.SubUpdates()
+}
+
+// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
+func (m *manager) SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo) {
+	m.localWorkerPool.SetUpdate(ctx, info)
 }
 
 // Trigger a discovery and wait for the response.

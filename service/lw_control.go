@@ -26,7 +26,10 @@ import (
 // as a heartbeat notification, as well as providing information about
 // versions.
 func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empty, error) {
-	return &api.Empty{}, nil // TODO
+	if req != nil {
+		s.Manager.SetLocalWorkerUpdate(ctx, *req)
+	}
+	return &api.Empty{}, nil
 }
 
 // GetDiscoverRequests is used to allow the netmanager to request a discovery by
