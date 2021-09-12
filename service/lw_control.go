@@ -157,11 +157,14 @@ func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.L
 	ch, cancel := s.Manager.SubscribeOutputRequests()
 	defer cancel()
 	ctx := server.Context()
+	moduleID := req.GetModuleId()
 	for {
 		select {
 		case msg := <-ch:
-			if err := server.Send(&msg); err != nil {
-				return err
+			if moduleID == "" || hasMatchingModuleID(msg.GetAddress(), moduleID) {
+				if err := server.Send(&msg); err != nil {
+					return err
+				}
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -190,11 +193,14 @@ func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.L
 	ch, cancel := s.Manager.SubscribeSwitchRequests()
 	defer cancel()
 	ctx := server.Context()
+	moduleID := req.GetModuleId()
 	for {
 		select {
 		case msg := <-ch:
-			if err := server.Send(&msg); err != nil {
-				return err
+			if moduleID == "" || hasMatchingModuleID(msg.GetAddress(), moduleID) {
+				if err := server.Send(&msg); err != nil {
+					return err
+				}
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -234,4 +240,9 @@ func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_
 			return nil
 		}
 	}
+}
+
+func hasMatchingModuleID(addr api.ObjectAddress, moduleID string) bool {
+	m, _, _ := api.SplitAddress(addr)
+	return m == moduleID
 }
