@@ -80,8 +80,13 @@ func (s *service) GetPowerRequests(req *api.PowerRequestsOptions, server api.Loc
 	for {
 		select {
 		case msg := <-ch:
-			if err := server.Send(msg.GetRequest()); err != nil {
-				return err
+			if msg.GetRequest() != nil {
+				if err := server.Send(msg.GetRequest()); err != nil {
+					return err
+				}
+				if !req.GetManualConfirm() {
+					s.Manager.SetPowerActual(*msg.GetRequest())
+				}
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -115,6 +120,9 @@ func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWo
 		case msg := <-ch:
 			if err := server.Send(&msg); err != nil {
 				return err
+			}
+			if !req.GetManualConfirm() {
+				s.Manager.SetLocActual(msg)
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -165,6 +173,9 @@ func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.L
 				if err := server.Send(&msg); err != nil {
 					return err
 				}
+				if !req.GetManualConfirm() {
+					s.Manager.SetOutputActual(msg)
+				}
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -200,6 +211,9 @@ func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.L
 			if moduleID == "" || hasMatchingModuleID(msg.GetAddress(), moduleID) {
 				if err := server.Send(&msg); err != nil {
 					return err
+				}
+				if !req.GetManualConfirm() {
+					s.Manager.SetSwitchActual(msg)
 				}
 			}
 		case <-ctx.Done():
