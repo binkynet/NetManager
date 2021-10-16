@@ -258,5 +258,5 @@ func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_
 
 func hasMatchingModuleID(addr api.ObjectAddress, moduleID string) bool {
 	m, _, _ := api.SplitAddress(addr)
-	return m == moduleID
+	return m == moduleID || m == api.GlobalModuleID
 }
