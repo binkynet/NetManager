@@ -166,6 +166,11 @@ func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.L
 	defer cancel()
 	ctx := server.Context()
 	moduleID := req.GetModuleId()
+	log := s.Log.With().Str("module", moduleID).Logger()
+	log.Debug().Msg("Start GetOutputRequests")
+	defer func() {
+		log.Debug().Msg("End GetOutputRequests")
+	}()
 	for {
 		select {
 		case msg := <-ch:
