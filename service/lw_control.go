@@ -170,7 +170,11 @@ func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.L
 		select {
 		case msg := <-ch:
 			if moduleID == "" || hasMatchingModuleID(msg.GetAddress(), moduleID) {
-				s.Log.Debug().Str("address", string(msg.GetAddress())).Msg("Send output request")
+				s.Log.Debug().
+					Str("address", string(msg.GetAddress())).
+					Str("to", moduleID).
+					Int32("value", msg.GetRequest().GetValue()).
+					Msg("Send output request")
 				if err := server.Send(&msg); err != nil {
 					return err
 				}
