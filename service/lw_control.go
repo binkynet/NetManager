@@ -141,7 +141,7 @@ func (s *service) SetLocActuals(server api.LocalWorkerControlService_SetLocActua
 		} else if err != nil {
 			return err
 		}
-		s.Manager.SetLocActual(*msg)
+		s.Manager.SetLocActual(*msg.Clone())
 	}
 }
 
@@ -155,7 +155,7 @@ func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSenso
 		} else if err != nil {
 			return err
 		}
-		s.Manager.SetSensorActual(*msg)
+		s.Manager.SetSensorActual(*msg.Clone())
 	}
 }
 
@@ -209,7 +209,7 @@ func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutpu
 		} else if err != nil {
 			return err
 		}
-		s.Manager.SetOutputActual(*msg)
+		s.Manager.SetOutputActual(*msg.Clone())
 	}
 }
 
@@ -248,7 +248,7 @@ func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitc
 		} else if err != nil {
 			return err
 		}
-		s.Manager.SetSwitchActual(*msg)
+		s.Manager.SetSwitchActual(*msg.Clone())
 	}
 }
 
