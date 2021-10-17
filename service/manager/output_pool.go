@@ -58,11 +58,16 @@ func (p *outputPool) SetActual(x api.Output) {
 
 	e, found := p.entries[x.Address]
 	if !found {
-		// Apparently we do not care for this output
-		return
-	} else {
-		e.Actual = x.GetActual().Clone()
+		// Check global address
+		_, local, _ := api.SplitAddress(x.Address)
+		globalAddr := api.JoinModuleLocal(api.GlobalModuleID, local)
+		e, found = p.entries[globalAddr]
+		if !found {
+			// Apparently we do not care for this output
+			return
+		}
 	}
+	e.Actual = x.GetActual().Clone()
 	p.actualChanges.Pub(e.Clone())
 }
 
