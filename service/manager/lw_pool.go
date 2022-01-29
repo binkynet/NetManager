@@ -18,6 +18,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
@@ -28,24 +29,30 @@ type localWorkerPool struct {
 	log     zerolog.Logger
 	mutex   sync.RWMutex
 	updates *pubsub.PubSub
-	workers map[string]api.LocalWorkerInfo
+	workers map[string]localWorkerEntry
+}
+
+type localWorkerEntry struct {
+	api.LocalWorkerInfo
+	lastUpdatedAt time.Time
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
 	return &localWorkerPool{
 		log:     log,
 		updates: pubsub.New(),
-		workers: make(map[string]api.LocalWorkerInfo),
+		workers: make(map[string]localWorkerEntry),
 	}
 }
 
 // GetInfo fetches the last known info for a local worker with given ID.
-func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, bool) {
+// Returns: info, lastUpdatedAt, found
+func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, time.Time, bool) {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
 	info, found := p.workers[id]
-	return info, found
+	return info.LocalWorkerInfo, info.lastUpdatedAt, found
 }
 
 // GetAll fetches the last known info for all local workers.
@@ -55,7 +62,7 @@ func (p *localWorkerPool) GetAll() []api.LocalWorkerInfo {
 
 	result := make([]api.LocalWorkerInfo, 0, len(p.workers))
 	for _, info := range p.workers {
-		result = append(result, info)
+		result = append(result, info.LocalWorkerInfo)
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Id < result[j].Id
@@ -68,7 +75,10 @@ func (p *localWorkerPool) SetUpdate(ctx context.Context, info api.LocalWorkerInf
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.workers[info.GetId()] = info
+	p.workers[info.GetId()] = localWorkerEntry{
+		LocalWorkerInfo: info,
+		lastUpdatedAt:   time.Now(),
+	}
 	p.updates.Pub(info)
 }
 

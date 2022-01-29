@@ -16,6 +16,7 @@ package manager
 
 import (
 	"context"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/config"
@@ -29,7 +30,8 @@ type Manager interface {
 	Run(ctx context.Context) error
 
 	// GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
-	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, bool)
+	// Returns: info, lastUpdatedAt, found
+	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool)
 	// GetAllLocalWorkers fetches the last known info for all local workers.
 	GetAllLocalWorkers() []api.LocalWorkerInfo
 	// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
@@ -155,7 +157,8 @@ func (m *manager) Run(ctx context.Context) error {
 }
 
 // GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
-func (m *manager) GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, bool) {
+// Returns: LWinfo, LastUpdatedAt, found
+func (m *manager) GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool) {
 	return m.localWorkerPool.GetInfo(id)
 }
 
