@@ -15,6 +15,8 @@
 package service
 
 import (
+	"time"
+
 	api "github.com/binkynet/BinkyNet/apis/v1"
 )
 
@@ -47,6 +49,7 @@ func (s *service) GetConfig(req *api.LocalWorkerInfo, server api.LocalWorkerConf
 		}
 		// Send config
 		log.Debug().Msg("Sending config...")
+		cfg.Unixtime = time.Now().Unix()
 		if err := server.Send(&cfg); err != nil {
 			log.Debug().Err(err).Msg("Send(config) failed")
 			return err
