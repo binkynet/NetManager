@@ -27,7 +27,10 @@ import (
 // versions.
 func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empty, error) {
 	if req != nil {
-		s.Manager.SetLocalWorkerUpdate(ctx, *req)
+		s.Manager.SetLocalWorkerActual(ctx, api.LocalWorker{
+			Id:     req.GetId(),
+			Actual: req,
+		})
 	}
 	return &api.Empty{}, nil
 }

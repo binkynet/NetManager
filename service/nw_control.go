@@ -22,6 +22,46 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Set the requested local worker state
+func (s *service) SetLocalWorkerRequest(ctx context.Context, req *api.LocalWorker) (*api.Empty, error) {
+	if err := s.Manager.SetLocalWorkerRequest(ctx, *req); err != nil {
+		return nil, err
+	}
+	return &api.Empty{}, nil
+}
+
+// Set the actual local worker state
+func (s *service) SetLocalWorkerActual(ctx context.Context, req *api.LocalWorker) (*api.Empty, error) {
+	if err := s.Manager.SetLocalWorkerActual(ctx, *req); err != nil {
+		return nil, err
+	}
+	return &api.Empty{}, nil
+}
+
+// Watch local worker changes
+func (s *service) WatchLocalWorkers(req *api.WatchOptions, server api.NetworkControlService_WatchLocalWorkersServer) error {
+	ctx := server.Context()
+	ach, acancel := s.Manager.SubscribeLocalWorkerActuals(req.GetWatchActualChanges())
+	defer acancel()
+	rch, rcancel := s.Manager.SubscribeLocalWorkerRequests(req.GetWatchRequestChanges())
+	defer rcancel()
+	for {
+		select {
+		case msg := <-ach:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case msg := <-rch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
+}
+
 func (s *service) SetPowerRequest(ctx context.Context, req *api.PowerState) (*api.Empty, error) {
 	s.Manager.SetPowerRequest(*req)
 	return &api.Empty{}, nil
@@ -166,6 +206,30 @@ func (s *service) WatchSwitches(req *api.WatchOptions, server api.NetworkControl
 				return err
 			}
 		case msg := <-rch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
+}
+
+// Set an actual clock state
+func (s *service) SetClockActual(ctx context.Context, req *api.Clock) (*api.Empty, error) {
+	s.Manager.SetClockActual(*req)
+	return &api.Empty{}, nil
+}
+
+// Watch clock changes
+func (s *service) WatchClock(req *api.WatchOptions, server api.NetworkControlService_WatchClockServer) error {
+	ctx := server.Context()
+	ach, acancel := s.Manager.SubscribeClockActuals(req.GetWatchActualChanges())
+	defer acancel()
+	for {
+		select {
+		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
 				return err
 			}

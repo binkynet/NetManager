@@ -34,10 +34,14 @@ type Manager interface {
 	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool)
 	// GetAllLocalWorkers fetches the last known info for all local workers.
 	GetAllLocalWorkers() []api.LocalWorkerInfo
-	// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
-	SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc)
-	// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
-	SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo)
+	// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
+	SubscribeLocalWorkerRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc)
+	// SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
+	SubscribeLocalWorkerActuals(enabled bool) (chan api.LocalWorker, context.CancelFunc)
+	// SetLocalWorkerRequest sets the requested state of a local worker
+	SetLocalWorkerRequest(ctx context.Context, info api.LocalWorker) error
+	// SetLocalWorkerActual sets the actual state of a local worker
+	SetLocalWorkerActual(ctx context.Context, info api.LocalWorker) error
 
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
@@ -167,14 +171,24 @@ func (m *manager) GetAllLocalWorkers() []api.LocalWorkerInfo {
 	return m.localWorkerPool.GetAll()
 }
 
-// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
-func (m *manager) SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc) {
-	return m.localWorkerPool.SubUpdates()
+// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
+func (m *manager) SubscribeLocalWorkerRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubRequests(enabled)
 }
 
-// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
-func (m *manager) SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo) {
-	m.localWorkerPool.SetUpdate(ctx, info)
+// SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
+func (m *manager) SubscribeLocalWorkerActuals(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubActuals(enabled)
+}
+
+// SetLocalWorkerRequest sets the requested state of a local worker
+func (m *manager) SetLocalWorkerRequest(ctx context.Context, lw api.LocalWorker) error {
+	return m.localWorkerPool.SetRequest(ctx, lw)
+}
+
+// SetLocalWorkerActual sets the actual state of a local worker
+func (m *manager) SetLocalWorkerActual(ctx context.Context, lw api.LocalWorker) error {
+	return m.localWorkerPool.SetActual(ctx, lw)
 }
 
 // Trigger a discovery and wait for the response.
