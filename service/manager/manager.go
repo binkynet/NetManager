@@ -34,9 +34,9 @@ type Manager interface {
 	// GetAllLocalWorkers fetches the last known info for all local workers.
 	GetAllLocalWorkers() []api.LocalWorkerInfo
 	// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
-	SubscribeLocalWorkerRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc)
+	SubscribeLocalWorkerRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc)
 	// SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
-	SubscribeLocalWorkerActuals(enabled bool) (chan api.LocalWorker, context.CancelFunc)
+	SubscribeLocalWorkerActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc)
 	// SetLocalWorkerRequest sets the requested state of a local worker
 	SetLocalWorkerRequest(ctx context.Context, info api.LocalWorker) error
 	// SetLocalWorkerActual sets the actual state of a local worker
@@ -76,23 +76,23 @@ type Manager interface {
 	// Set the actual output state
 	SetOutputActual(x api.Output)
 	// Subscribe to output requests
-	SubscribeOutputRequests(enabled bool) (chan api.Output, context.CancelFunc)
+	SubscribeOutputRequests(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 	// Subscribe to output actuals
-	SubscribeOutputActuals(enabled bool) (chan api.Output, context.CancelFunc)
+	SubscribeOutputActuals(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 
 	// Set the actual sensor state
 	SetSensorActual(x api.Sensor)
 	// Subscribe to sensor actuals
-	SubscribeSensorActuals(enabled bool) (chan api.Sensor, context.CancelFunc)
+	SubscribeSensorActuals(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc)
 
 	// Set the requested switch state
 	SetSwitchRequest(x api.Switch)
 	// Set the actual switch state
 	SetSwitchActual(x api.Switch)
 	// Subscribe to switch requests
-	SubscribeSwitchRequests(enabled bool) (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchRequests(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 	// Subscribe to switch actuals
-	SubscribeSwitchActuals(enabled bool) (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchActuals(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 
 	// Set the actual clock state
 	SetClockActual(x api.Clock)
@@ -173,13 +173,13 @@ func (m *manager) GetAllLocalWorkers() []api.LocalWorkerInfo {
 }
 
 // SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
-func (m *manager) SubscribeLocalWorkerRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
-	return m.localWorkerPool.SubRequests(enabled)
+func (m *manager) SubscribeLocalWorkerRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubRequests(enabled, filter)
 }
 
 // SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
-func (m *manager) SubscribeLocalWorkerActuals(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
-	return m.localWorkerPool.SubActuals(enabled)
+func (m *manager) SubscribeLocalWorkerActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubActuals(enabled, filter)
 }
 
 // SetLocalWorkerRequest sets the requested state of a local worker
@@ -269,13 +269,13 @@ func (m *manager) SetOutputActual(x api.Output) {
 }
 
 // Subscribe to output requests
-func (m *manager) SubscribeOutputRequests(enabled bool) (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubRequest(enabled)
+func (m *manager) SubscribeOutputRequests(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubRequest(enabled, filter)
 }
 
 // Subscribe to output actuals
-func (m *manager) SubscribeOutputActuals(enabled bool) (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubActual(enabled)
+func (m *manager) SubscribeOutputActuals(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubActual(enabled, filter)
 }
 
 // Set the actual sensor state
@@ -284,8 +284,8 @@ func (m *manager) SetSensorActual(x api.Sensor) {
 }
 
 // Subscribe to sensor actuals
-func (m *manager) SubscribeSensorActuals(enabled bool) (chan api.Sensor, context.CancelFunc) {
-	return m.sensorPool.SubActual(enabled)
+func (m *manager) SubscribeSensorActuals(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
+	return m.sensorPool.SubActual(enabled, filter)
 }
 
 // Set the requested switch state
@@ -299,13 +299,13 @@ func (m *manager) SetSwitchActual(x api.Switch) {
 }
 
 // Subscribe to switch requests
-func (m *manager) SubscribeSwitchRequests(enabled bool) (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubRequest(enabled)
+func (m *manager) SubscribeSwitchRequests(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubRequest(enabled, filter)
 }
 
 // Subscribe to switch actuals
-func (m *manager) SubscribeSwitchActuals(enabled bool) (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubActual(enabled)
+func (m *manager) SubscribeSwitchActuals(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubActual(enabled, filter)
 }
 
 // Set the actual clock state

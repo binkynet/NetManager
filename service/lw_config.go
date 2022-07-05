@@ -18,6 +18,7 @@ import (
 	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
+	"github.com/binkynet/NetManager/service/manager"
 )
 
 // GetConfig is used to fetch the configuration for a local worker.
@@ -31,7 +32,7 @@ func (s *service) GetConfig(req *api.LocalWorkerInfo, server api.LocalWorkerConf
 	log.Debug().Msg("GetConfig")
 
 	// Subscribe to config changes
-	rch, cancel := s.Manager.SubscribeLocalWorkerRequests(true)
+	rch, cancel := s.Manager.SubscribeLocalWorkerRequests(true, manager.ModuleFilter(req.GetId()))
 	defer cancel()
 
 	for {

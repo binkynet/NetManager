@@ -49,18 +49,20 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *sensorPool) SubActual(enabled bool) (chan api.Sensor, context.CancelFunc) {
+func (p *sensorPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
 	c := make(chan api.Sensor)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Sensor) {
-			c <- *msg
+			if filter.Matches(msg.GetAddress()) {
+				c <- *msg
+			}
 		}
 		p.actualChanges.Sub(cb)
 		// Publish all known actual states
 		p.mutex.RLock()
 		for _, sensor := range p.entries {
-			if sensor.GetActual() != nil {
+			if sensor.GetActual() != nil && filter.Matches(sensor.GetAddress()) {
 				p.actualChanges.Sub(sensor.Clone())
 			}
 		}

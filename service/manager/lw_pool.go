@@ -130,17 +130,19 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker) err
 }
 
 // SubRequests is used to subscribe to all request changes of local workers.
-func (p *localWorkerPool) SubRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
+func (p *localWorkerPool) SubRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
 	c := make(chan api.LocalWorker)
 	if enabled {
 		// Subscribe
 		cb := func(msg api.LocalWorker) {
-			c <- msg
+			if filter.MatchesModuleID(msg.GetId()) {
+				c <- msg
+			}
 		}
 		p.requests.Sub(cb)
 		// Push all known request states
 		for _, lw := range p.GetAllWorkers() {
-			if lw.GetRequest() != nil {
+			if lw.GetRequest() != nil && filter.MatchesModuleID(lw.GetId()) {
 				p.requests.Pub(lw)
 			}
 		}
@@ -156,16 +158,18 @@ func (p *localWorkerPool) SubRequests(enabled bool) (chan api.LocalWorker, conte
 }
 
 // SubActuals is used to subscribe to actual changes of local workers.
-func (p *localWorkerPool) SubActuals(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
+func (p *localWorkerPool) SubActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
 	c := make(chan api.LocalWorker)
 	if enabled {
 		cb := func(msg api.LocalWorker) {
-			c <- msg
+			if filter.MatchesModuleID(msg.GetId()) {
+				c <- msg
+			}
 		}
 		p.actuals.Sub(cb)
 		// Push all known actual states
 		for _, lw := range p.GetAllWorkers() {
-			if lw.GetActual() != nil {
+			if lw.GetActual() != nil && filter.MatchesModuleID(lw.GetId()) {
 				p.actuals.Pub(lw)
 			}
 		}

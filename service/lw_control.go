@@ -20,6 +20,7 @@ import (
 
 	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
+	"github.com/binkynet/NetManager/service/manager"
 )
 
 // Ping messages are send at regular intervals by local workers
@@ -168,7 +169,7 @@ func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSenso
 // GetOutputRequests is used to get a stream of output requests from the network
 // master.
 func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.LocalWorkerControlService_GetOutputRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeOutputRequests(true)
+	ch, cancel := s.Manager.SubscribeOutputRequests(true, manager.ModuleFilter(req.GetModuleId()))
 	defer cancel()
 	ctx := server.Context()
 	moduleID := req.GetModuleId()
@@ -222,7 +223,7 @@ func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutpu
 // GetSwitchRequests is used to get a stream of switch requests from the network
 // master.
 func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.LocalWorkerControlService_GetSwitchRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeSwitchRequests(true)
+	ch, cancel := s.Manager.SubscribeSwitchRequests(true, manager.ModuleFilter(req.GetModuleId()))
 	defer cancel()
 	ctx := server.Context()
 	moduleID := req.GetModuleId()
