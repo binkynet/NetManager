@@ -78,6 +78,21 @@ func (p *localWorkerPool) GetAll() []api.LocalWorkerInfo {
 	return result
 }
 
+// GetAllWorkers fetches the last known state for all local workers.
+func (p *localWorkerPool) GetAllWorkers() []api.LocalWorker {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	result := make([]api.LocalWorker, 0, len(p.workers))
+	for _, entry := range p.workers {
+		result = append(result, entry.LocalWorker)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Id < result[j].Id
+	})
+	return result
+}
+
 // SetRequest sets the requested state of a local worker
 func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) error {
 	p.mutex.Lock()
@@ -122,6 +137,10 @@ func (p *localWorkerPool) SubRequests(enabled bool) (chan api.LocalWorker, conte
 			c <- msg
 		}
 		p.requests.Sub(cb)
+		// Push all
+		for _, lw := range p.GetAllWorkers() {
+			p.requests.Pub(lw)
+		}
 		return c, func() {
 			p.requests.Leave(cb)
 			close(c)
