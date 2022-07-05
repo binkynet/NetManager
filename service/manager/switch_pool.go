@@ -74,10 +74,20 @@ func (p *switchPool) SetActual(x api.Switch) {
 func (p *switchPool) SubRequest(enabled bool) (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
 	if enabled {
+		// Subscribe
 		cb := func(msg *api.Switch) {
 			c <- *msg
 		}
 		p.requestChanges.Sub(cb)
+		// Publish all known request states
+		p.mutex.RLock()
+		for _, sw := range p.entries {
+			if sw.GetRequest() != nil {
+				p.requestChanges.Sub(sw.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
 		return c, func() {
 			p.requestChanges.Leave(cb)
 			close(c)
@@ -92,10 +102,20 @@ func (p *switchPool) SubRequest(enabled bool) (chan api.Switch, context.CancelFu
 func (p *switchPool) SubActual(enabled bool) (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
 	if enabled {
+		// Subscribe
 		cb := func(msg *api.Switch) {
 			c <- *msg
 		}
 		p.actualChanges.Sub(cb)
+		// Publish all known actual states
+		p.mutex.RLock()
+		for _, sw := range p.entries {
+			if sw.GetActual() != nil {
+				p.actualChanges.Sub(sw.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
 		return c, func() {
 			p.actualChanges.Leave(cb)
 			close(c)

@@ -133,13 +133,16 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker) err
 func (p *localWorkerPool) SubRequests(enabled bool) (chan api.LocalWorker, context.CancelFunc) {
 	c := make(chan api.LocalWorker)
 	if enabled {
+		// Subscribe
 		cb := func(msg api.LocalWorker) {
 			c <- msg
 		}
 		p.requests.Sub(cb)
-		// Push all
+		// Push all known request states
 		for _, lw := range p.GetAllWorkers() {
-			p.requests.Pub(lw)
+			if lw.GetRequest() != nil {
+				p.requests.Pub(lw)
+			}
 		}
 		return c, func() {
 			p.requests.Leave(cb)
@@ -160,6 +163,12 @@ func (p *localWorkerPool) SubActuals(enabled bool) (chan api.LocalWorker, contex
 			c <- msg
 		}
 		p.actuals.Sub(cb)
+		// Push all known actual states
+		for _, lw := range p.GetAllWorkers() {
+			if lw.GetActual() != nil {
+				p.actuals.Pub(lw)
+			}
+		}
 		return c, func() {
 			p.actuals.Leave(cb)
 			close(c)

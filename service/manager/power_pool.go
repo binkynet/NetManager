@@ -59,10 +59,16 @@ func (p *powerPool) SetActual(x api.PowerState) {
 func (p *powerPool) SubRequest(enabled bool) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
 	if enabled {
+		// Subscribe
 		cb := func(msg *api.Power) {
 			c <- *msg
 		}
 		p.requestChanges.Sub(cb)
+		// Publish known request state
+		p.mutex.RLock()
+		p.requestChanges.Sub(p.power.Clone())
+		p.mutex.RUnlock()
+		// Return channel & cancel function
 		return c, func() {
 			p.requestChanges.Leave(cb)
 			close(c)
@@ -77,10 +83,16 @@ func (p *powerPool) SubRequest(enabled bool) (chan api.Power, context.CancelFunc
 func (p *powerPool) SubActual(enabled bool) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
 	if enabled {
+		// Subscribe
 		cb := func(msg *api.Power) {
 			c <- *msg
 		}
 		p.actualChanges.Sub(cb)
+		// Publish known request state
+		p.mutex.RLock()
+		p.actualChanges.Sub(p.power.Clone())
+		p.mutex.RUnlock()
+		// Return channel & cancel function
 		return c, func() {
 			p.actualChanges.Leave(cb)
 			close(c)

@@ -52,10 +52,20 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 func (p *sensorPool) SubActual(enabled bool) (chan api.Sensor, context.CancelFunc) {
 	c := make(chan api.Sensor)
 	if enabled {
+		// Subscribe
 		cb := func(msg *api.Sensor) {
 			c <- *msg
 		}
 		p.actualChanges.Sub(cb)
+		// Publish all known actual states
+		p.mutex.RLock()
+		for _, sensor := range p.entries {
+			if sensor.GetActual() != nil {
+				p.actualChanges.Sub(sensor.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
 		return c, func() {
 			p.actualChanges.Leave(cb)
 			close(c)
