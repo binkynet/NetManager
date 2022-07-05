@@ -27,7 +27,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/binkynet/NetManager/service"
-	"github.com/binkynet/NetManager/service/config"
 	"github.com/binkynet/NetManager/service/manager"
 	"github.com/binkynet/NetManager/service/server"
 )
@@ -65,15 +64,10 @@ func main() {
 
 	// Prepare local worker registry
 	reconfigureQueue := make(chan string, 64)
-	configReg, err := config.NewFileRegistry(ctx, registryFolder, reconfigureQueue)
-	if err != nil {
-		Exitf("Failed to initialize worker configuration registry: %v\n", err)
-	}
 
 	// Prepare manager core
 	mgr, err := manager.New(manager.Dependencies{
 		Log:              logger,
-		ConfigRegistry:   configReg,
 		ReconfigureQueue: reconfigureQueue,
 	})
 	if err != nil {
@@ -84,9 +78,8 @@ func main() {
 	svc, err := service.NewService(service.Config{
 		RequiredWorkerVersion: "",
 	}, service.Dependencies{
-		Log:            logger,
-		ConfigRegistry: configReg,
-		Manager:        mgr,
+		Log:     logger,
+		Manager: mgr,
 	})
 	if err != nil {
 		Exitf("Failed to initialize Service: %v\n", err)

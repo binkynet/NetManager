@@ -16,15 +16,9 @@ package service
 
 import (
 	model "github.com/binkynet/BinkyNet/apis/v1"
-	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 
-	"github.com/binkynet/NetManager/service/config"
 	"github.com/binkynet/NetManager/service/manager"
-)
-
-const (
-	contentTypeJSON = "application/json"
 )
 
 // Service is the API exposed by this service.
@@ -44,22 +38,18 @@ type Config struct {
 type Dependencies struct {
 	Log zerolog.Logger
 
-	Manager        manager.Manager
-	ConfigRegistry config.Registry
+	Manager manager.Manager
 }
 
 type service struct {
 	Config
 	Dependencies
-
-	configChanges *pubsub.PubSub
 }
 
 // NewService creates a Service instance and returns it.
 func NewService(conf Config, deps Dependencies) (Service, error) {
 	return &service{
-		Config:        conf,
-		Dependencies:  deps,
-		configChanges: pubsub.New(),
+		Config:       conf,
+		Dependencies: deps,
 	}, nil
 }

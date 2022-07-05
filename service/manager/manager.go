@@ -19,7 +19,6 @@ import (
 	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
-	"github.com/binkynet/NetManager/service/config"
 	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 )
@@ -101,8 +100,6 @@ type Manager interface {
 type Dependencies struct {
 	Log zerolog.Logger
 
-	// Local worker registry
-	ConfigRegistry config.Registry
 	// Reconfiguration queue (chan localWorkerID).
 	// The manager must listen to entries in this queue and reconfigure
 	// when it receives a local worker ID.

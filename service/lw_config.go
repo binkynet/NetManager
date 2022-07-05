@@ -31,35 +31,25 @@ func (s *service) GetConfig(req *api.LocalWorkerInfo, server api.LocalWorkerConf
 	log.Debug().Msg("GetConfig")
 
 	// Subscribe to config changes
-	configChanged := make(chan struct{})
-	defer close(configChanged)
-	onConfigChanged := func(idThatChanged string) {
-		if id == idThatChanged {
-			configChanged <- struct{}{}
-		}
-	}
-	s.configChanges.Sub(onConfigChanged)
-	defer s.configChanges.Leave(onConfigChanged)
+	rch, cancel := s.Manager.SubscribeLocalWorkerRequests(true)
+	defer cancel()
 
 	for {
-		// Fetch config
-		cfg, err := s.ConfigRegistry.Get(id)
-		if err != nil {
-			return api.NotFound("Failed to get configuration for '%s': %s", id, err.Error())
-		}
-		// Send config
-		log.Debug().Msg("Sending config...")
-		cfg.Unixtime = time.Now().Unix()
-		if err := server.Send(&cfg); err != nil {
-			log.Debug().Err(err).Msg("Send(config) failed")
-			return err
-		}
 		select {
+		case lw := <-rch:
+			if lw.GetId() == id {
+				if cfg := lw.GetRequest(); cfg != nil {
+					log.Debug().Msg("Sending config...")
+					cfg.Unixtime = time.Now().Unix()
+					if err := server.Send(cfg); err != nil {
+						log.Debug().Err(err).Msg("Send(config) failed")
+						return err
+					}
+				}
+			}
 		case <-ctx.Done():
 			// Context canceled
 			return nil
-		case <-configChanged:
-			// Resend config
 		}
 	}
 }
