@@ -71,26 +71,38 @@ func (p *switchPool) SetActual(x api.Switch) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *switchPool) SubRequest() (chan api.Switch, context.CancelFunc) {
+func (p *switchPool) SubRequest(enabled bool) (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
-	cb := func(msg *api.Switch) {
-		c <- *msg
-	}
-	p.requestChanges.Sub(cb)
-	return c, func() {
-		p.requestChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Switch) {
+			c <- *msg
+		}
+		p.requestChanges.Sub(cb)
+		return c, func() {
+			p.requestChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
-func (p *switchPool) SubActual() (chan api.Switch, context.CancelFunc) {
+func (p *switchPool) SubActual(enabled bool) (chan api.Switch, context.CancelFunc) {
 	c := make(chan api.Switch)
-	cb := func(msg *api.Switch) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Switch) {
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

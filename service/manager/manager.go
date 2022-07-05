@@ -51,46 +51,46 @@ type Manager interface {
 	// Set the actual power state
 	SetPowerActual(x api.PowerState)
 	// Subscribe to power requests
-	SubscribePowerRequests() (chan api.Power, context.CancelFunc)
+	SubscribePowerRequests(enabled bool) (chan api.Power, context.CancelFunc)
 	// Subscribe to power actuals
-	SubscribePowerActuals() (chan api.Power, context.CancelFunc)
+	SubscribePowerActuals(enabled bool) (chan api.Power, context.CancelFunc)
 
 	// Set the requested loc state
 	SetLocRequest(x api.Loc)
 	// Set the actual loc state
 	SetLocActual(x api.Loc)
 	// Subscribe to loc requests
-	SubscribeLocRequests() (chan api.Loc, context.CancelFunc)
+	SubscribeLocRequests(enabled bool) (chan api.Loc, context.CancelFunc)
 	// Subscribe to loc actuals
-	SubscribeLocActuals() (chan api.Loc, context.CancelFunc)
+	SubscribeLocActuals(enabled bool) (chan api.Loc, context.CancelFunc)
 
 	// Set the requested output state
 	SetOutputRequest(x api.Output)
 	// Set the actual output state
 	SetOutputActual(x api.Output)
 	// Subscribe to output requests
-	SubscribeOutputRequests() (chan api.Output, context.CancelFunc)
+	SubscribeOutputRequests(enabled bool) (chan api.Output, context.CancelFunc)
 	// Subscribe to output actuals
-	SubscribeOutputActuals() (chan api.Output, context.CancelFunc)
+	SubscribeOutputActuals(enabled bool) (chan api.Output, context.CancelFunc)
 
 	// Set the actual sensor state
 	SetSensorActual(x api.Sensor)
 	// Subscribe to sensor actuals
-	SubscribeSensorActuals() (chan api.Sensor, context.CancelFunc)
+	SubscribeSensorActuals(enabled bool) (chan api.Sensor, context.CancelFunc)
 
 	// Set the requested switch state
 	SetSwitchRequest(x api.Switch)
 	// Set the actual switch state
 	SetSwitchActual(x api.Switch)
 	// Subscribe to switch requests
-	SubscribeSwitchRequests() (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchRequests(enabled bool) (chan api.Switch, context.CancelFunc)
 	// Subscribe to switch actuals
-	SubscribeSwitchActuals() (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchActuals(enabled bool) (chan api.Switch, context.CancelFunc)
 
 	// Set the actual clock state
 	SetClockActual(x api.Clock)
 	// Subscribe to clock actuals
-	SubscribeClockActuals() (chan api.Clock, context.CancelFunc)
+	SubscribeClockActuals(enabled bool) (chan api.Clock, context.CancelFunc)
 }
 
 // Dependencies of the manager.
@@ -204,13 +204,13 @@ func (m *manager) SetPowerActual(x api.PowerState) {
 }
 
 // Subscribe to power requests
-func (m *manager) SubscribePowerRequests() (chan api.Power, context.CancelFunc) {
-	return m.powerPool.SubRequest()
+func (m *manager) SubscribePowerRequests(enabled bool) (chan api.Power, context.CancelFunc) {
+	return m.powerPool.SubRequest(enabled)
 }
 
 // Subscribe to power actuals
-func (m *manager) SubscribePowerActuals() (chan api.Power, context.CancelFunc) {
-	return m.powerPool.SubActual()
+func (m *manager) SubscribePowerActuals(enabled bool) (chan api.Power, context.CancelFunc) {
+	return m.powerPool.SubActual(enabled)
 }
 
 // Set the requested loc state
@@ -224,13 +224,13 @@ func (m *manager) SetLocActual(x api.Loc) {
 }
 
 // Subscribe to loc requests
-func (m *manager) SubscribeLocRequests() (chan api.Loc, context.CancelFunc) {
-	return m.locPool.SubRequest()
+func (m *manager) SubscribeLocRequests(enabled bool) (chan api.Loc, context.CancelFunc) {
+	return m.locPool.SubRequest(enabled)
 }
 
 // Subscribe to loc actuals
-func (m *manager) SubscribeLocActuals() (chan api.Loc, context.CancelFunc) {
-	return m.locPool.SubActual()
+func (m *manager) SubscribeLocActuals(enabled bool) (chan api.Loc, context.CancelFunc) {
+	return m.locPool.SubActual(enabled)
 }
 
 // Set the requested output state
@@ -244,13 +244,13 @@ func (m *manager) SetOutputActual(x api.Output) {
 }
 
 // Subscribe to output requests
-func (m *manager) SubscribeOutputRequests() (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubRequest()
+func (m *manager) SubscribeOutputRequests(enabled bool) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubRequest(enabled)
 }
 
 // Subscribe to output actuals
-func (m *manager) SubscribeOutputActuals() (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubActual()
+func (m *manager) SubscribeOutputActuals(enabled bool) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubActual(enabled)
 }
 
 // Set the actual sensor state
@@ -259,8 +259,8 @@ func (m *manager) SetSensorActual(x api.Sensor) {
 }
 
 // Subscribe to sensor actuals
-func (m *manager) SubscribeSensorActuals() (chan api.Sensor, context.CancelFunc) {
-	return m.sensorPool.SubActual()
+func (m *manager) SubscribeSensorActuals(enabled bool) (chan api.Sensor, context.CancelFunc) {
+	return m.sensorPool.SubActual(enabled)
 }
 
 // Set the requested switch state
@@ -274,13 +274,13 @@ func (m *manager) SetSwitchActual(x api.Switch) {
 }
 
 // Subscribe to switch requests
-func (m *manager) SubscribeSwitchRequests() (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubRequest()
+func (m *manager) SubscribeSwitchRequests(enabled bool) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubRequest(enabled)
 }
 
 // Subscribe to switch actuals
-func (m *manager) SubscribeSwitchActuals() (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubActual()
+func (m *manager) SubscribeSwitchActuals(enabled bool) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubActual(enabled)
 }
 
 // Set the actual clock state
@@ -289,6 +289,6 @@ func (m *manager) SetClockActual(x api.Clock) {
 }
 
 // Subscribe to clock actuals
-func (m *manager) SubscribeClockActuals() (chan api.Clock, context.CancelFunc) {
-	return m.clockPool.SubActual()
+func (m *manager) SubscribeClockActuals(enabled bool) (chan api.Clock, context.CancelFunc) {
+	return m.clockPool.SubActual(enabled)
 }

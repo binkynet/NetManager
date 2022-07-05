@@ -74,7 +74,7 @@ func (s *service) SetDiscoverResult(ctx context.Context, req *api.DiscoverResult
 // GetPowerRequests is used to get a stream of power requests from the network
 // master.
 func (s *service) GetPowerRequests(req *api.PowerRequestsOptions, server api.LocalWorkerControlService_GetPowerRequestsServer) error {
-	ch, cancel := s.Manager.SubscribePowerRequests()
+	ch, cancel := s.Manager.SubscribePowerRequests(true)
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -112,7 +112,7 @@ func (s *service) SetPowerActuals(server api.LocalWorkerControlService_SetPowerA
 // GetLocRequests is used to get a stream of loc requests from the network
 // master.
 func (s *service) GetLocRequests(req *api.LocRequestsOptions, server api.LocalWorkerControlService_GetLocRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeLocRequests()
+	ch, cancel := s.Manager.SubscribeLocRequests(true)
 	defer cancel()
 	ctx := server.Context()
 	for {
@@ -162,7 +162,7 @@ func (s *service) SetSensorActuals(server api.LocalWorkerControlService_SetSenso
 // GetOutputRequests is used to get a stream of output requests from the network
 // master.
 func (s *service) GetOutputRequests(req *api.OutputRequestsOptions, server api.LocalWorkerControlService_GetOutputRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeOutputRequests()
+	ch, cancel := s.Manager.SubscribeOutputRequests(true)
 	defer cancel()
 	ctx := server.Context()
 	moduleID := req.GetModuleId()
@@ -216,7 +216,7 @@ func (s *service) SetOutputActuals(server api.LocalWorkerControlService_SetOutpu
 // GetSwitchRequests is used to get a stream of switch requests from the network
 // master.
 func (s *service) GetSwitchRequests(req *api.SwitchRequestsOptions, server api.LocalWorkerControlService_GetSwitchRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeSwitchRequests()
+	ch, cancel := s.Manager.SubscribeSwitchRequests(true)
 	defer cancel()
 	ctx := server.Context()
 	moduleID := req.GetModuleId()
@@ -255,7 +255,7 @@ func (s *service) SetSwitchActuals(server api.LocalWorkerControlService_SetSwitc
 // GetClock is used to get a stream of switch current time of day from the network
 // master.
 func (s *service) GetClock(req *api.Empty, server api.LocalWorkerControlService_GetClockServer) error {
-	ch, cancel := s.Manager.SubscribeClockActuals()
+	ch, cancel := s.Manager.SubscribeClockActuals(true)
 	defer cancel()
 	ctx := server.Context()
 	for {

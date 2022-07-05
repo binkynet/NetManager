@@ -49,14 +49,20 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *sensorPool) SubActual() (chan api.Sensor, context.CancelFunc) {
+func (p *sensorPool) SubActual(enabled bool) (chan api.Sensor, context.CancelFunc) {
 	c := make(chan api.Sensor)
-	cb := func(msg *api.Sensor) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Sensor) {
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

@@ -56,26 +56,38 @@ func (p *powerPool) SetActual(x api.PowerState) {
 	p.actualChanges.Pub(p.power.Clone())
 }
 
-func (p *powerPool) SubRequest() (chan api.Power, context.CancelFunc) {
+func (p *powerPool) SubRequest(enabled bool) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
-	cb := func(msg *api.Power) {
-		c <- *msg
-	}
-	p.requestChanges.Sub(cb)
-	return c, func() {
-		p.requestChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Power) {
+			c <- *msg
+		}
+		p.requestChanges.Sub(cb)
+		return c, func() {
+			p.requestChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
-func (p *powerPool) SubActual() (chan api.Power, context.CancelFunc) {
+func (p *powerPool) SubActual(enabled bool) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
-	cb := func(msg *api.Power) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Power) {
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

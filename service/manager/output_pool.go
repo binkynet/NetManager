@@ -71,26 +71,38 @@ func (p *outputPool) SetActual(x api.Output) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *outputPool) SubRequest() (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubRequest(enabled bool) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
-	cb := func(msg *api.Output) {
-		c <- *msg
-	}
-	p.requestChanges.Sub(cb)
-	return c, func() {
-		p.requestChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Output) {
+			c <- *msg
+		}
+		p.requestChanges.Sub(cb)
+		return c, func() {
+			p.requestChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
-func (p *outputPool) SubActual() (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubActual(enabled bool) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
-	cb := func(msg *api.Output) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Output) {
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
