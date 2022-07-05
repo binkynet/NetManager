@@ -62,6 +62,47 @@ func (s *service) WatchLocalWorkers(req *api.WatchOptions, server api.NetworkCon
 	}
 }
 
+// Set a requested device discovery state
+func (s *service) SetDeviceDiscoveryRequest(ctx context.Context, req *api.DeviceDiscovery) (*api.Empty, error) {
+	if err := s.Manager.SetDevicesDiscoveryRequest(ctx, *req); err != nil {
+		return nil, err
+	}
+	return &api.Empty{}, nil
+}
+
+// Set an actual device discovery state
+func (s *service) SetDeviceDiscoveryActual(ctx context.Context, req *api.DeviceDiscovery) (*api.Empty, error) {
+	if err := s.Manager.SetDevicesDiscoveryActual(ctx, *req); err != nil {
+		return nil, err
+	}
+	return &api.Empty{}, nil
+}
+
+// Watch device discovery changes
+func (s *service) WatchDeviceDiscoveries(req *api.WatchOptions, server api.NetworkControlService_WatchDeviceDiscoveriesServer) error {
+	ctx := server.Context()
+	ach, acancel := s.Manager.SubscribeDiscoverRequests(req.GetWatchActualChanges(), req.GetModuleId())
+	defer acancel()
+	rch, rcancel := s.Manager.SubscribeDiscoverActuals(req.GetWatchRequestChanges(), req.GetModuleId())
+	defer rcancel()
+	for {
+		select {
+		case msg := <-ach:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case msg := <-rch:
+			if err := server.Send(&msg); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			// Context canceled
+			return nil
+		}
+	}
+
+}
+
 func (s *service) SetPowerRequest(ctx context.Context, req *api.PowerState) (*api.Empty, error) {
 	s.Manager.SetPowerRequest(*req)
 	return &api.Empty{}, nil

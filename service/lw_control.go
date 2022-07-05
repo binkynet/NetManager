@@ -39,7 +39,7 @@ func (s *service) Ping(ctx context.Context, req *api.LocalWorkerInfo) (*api.Empt
 // the local worker.
 // The local worker in turn responds with a SetDiscoverResult call.
 func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.LocalWorkerControlService_GetDiscoverRequestsServer) error {
-	ch, cancel := s.Manager.SubscribeDiscoverRequests(req.GetId())
+	ch, cancel := s.Manager.SubscribeDiscoverRequests(true, req.GetId())
 	log := s.Log.With().Str("id", req.GetId()).Logger()
 	log.Debug().Msg("GetDiscoverRequests...")
 	defer cancel()
@@ -48,7 +48,7 @@ func (s *service) GetDiscoverRequests(req *api.LocalWorkerInfo, server api.Local
 		select {
 		case msg := <-ch:
 			log.Debug().Msg("Sending DiscoverRequest...")
-			if err := server.Send(&msg); err != nil {
+			if err := server.Send(msg.GetRequest()); err != nil {
 				return err
 			}
 		case <-ctx.Done():
@@ -68,7 +68,10 @@ func (s *service) SetDiscoverResult(ctx context.Context, req *api.DiscoverResult
 	if req == nil {
 		return nil, fmt.Errorf("Missing result")
 	}
-	if err := s.Manager.SetDiscoverResult(ctx, *req); err != nil {
+	if err := s.Manager.SetDevicesDiscoveryActual(ctx, api.DeviceDiscovery{
+		Id:     req.GetId(),
+		Actual: req.Clone(),
+	}); err != nil {
 		return nil, err
 	}
 	return &api.Empty{}, nil

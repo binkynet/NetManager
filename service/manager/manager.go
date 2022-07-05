@@ -44,10 +44,14 @@ type Manager interface {
 
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
-	// Subscribe to power requests
-	SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc)
-	// SetDiscoverResult is called by the local worker in response to discover requests.
-	SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error
+	// Trigger a discovery.
+	SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error
+	// SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
+	SetDevicesDiscoveryActual(ctx context.Context, req api.DeviceDiscovery) error
+	// Subscribe to discovery requests
+	SubscribeDiscoverRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc)
+	// Subscribe to discovery actuals
+	SubscribeDiscoverActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc)
 
 	// Set the requested power state
 	SetPowerRequest(x api.PowerState)
@@ -194,14 +198,24 @@ func (m *manager) Discover(ctx context.Context, id string) (*api.DiscoverResult,
 	return m.discoverPool.Trigger(ctx, id)
 }
 
-// Subscribe to power requests
-func (m *manager) SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc) {
-	return m.discoverPool.SubRequest(id)
+// Trigger a discovery.
+func (m *manager) SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error {
+	return m.discoverPool.SetDiscoverRequest(req)
 }
 
-// SetDiscoverResult is called by the local worker in response to discover requests.
-func (m *manager) SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error {
+// SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
+func (m *manager) SetDevicesDiscoveryActual(ctx context.Context, req api.DeviceDiscovery) error {
 	return m.discoverPool.SetDiscoverResult(req)
+}
+
+// Subscribe to discovery requests
+func (m *manager) SubscribeDiscoverRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	return m.discoverPool.SubRequests(enabled, id)
+}
+
+// Subscribe to discovery actuals
+func (m *manager) SubscribeDiscoverActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	return m.discoverPool.SubActuals(enabled, id)
 }
 
 // Set the requested power state
