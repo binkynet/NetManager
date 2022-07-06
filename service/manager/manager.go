@@ -19,7 +19,6 @@ import (
 	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
-	"github.com/binkynet/NetManager/service/config"
 	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 )
@@ -34,71 +33,77 @@ type Manager interface {
 	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool)
 	// GetAllLocalWorkers fetches the last known info for all local workers.
 	GetAllLocalWorkers() []api.LocalWorkerInfo
-	// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
-	SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc)
-	// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
-	SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo)
+	// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
+	SubscribeLocalWorkerRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc)
+	// SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
+	SubscribeLocalWorkerActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc)
+	// SetLocalWorkerRequest sets the requested state of a local worker
+	SetLocalWorkerRequest(ctx context.Context, info api.LocalWorker) error
+	// SetLocalWorkerActual sets the actual state of a local worker
+	SetLocalWorkerActual(ctx context.Context, info api.LocalWorker) error
 
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
-	// Subscribe to power requests
-	SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc)
-	// SetDiscoverResult is called by the local worker in response to discover requests.
-	SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error
+	// Trigger a discovery.
+	SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error
+	// SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
+	SetDevicesDiscoveryActual(ctx context.Context, req api.DeviceDiscovery) error
+	// Subscribe to discovery requests
+	SubscribeDiscoverRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc)
+	// Subscribe to discovery actuals
+	SubscribeDiscoverActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc)
 
 	// Set the requested power state
 	SetPowerRequest(x api.PowerState)
 	// Set the actual power state
 	SetPowerActual(x api.PowerState)
 	// Subscribe to power requests
-	SubscribePowerRequests() (chan api.Power, context.CancelFunc)
+	SubscribePowerRequests(enabled bool) (chan api.Power, context.CancelFunc)
 	// Subscribe to power actuals
-	SubscribePowerActuals() (chan api.Power, context.CancelFunc)
+	SubscribePowerActuals(enabled bool) (chan api.Power, context.CancelFunc)
 
 	// Set the requested loc state
 	SetLocRequest(x api.Loc)
 	// Set the actual loc state
 	SetLocActual(x api.Loc)
 	// Subscribe to loc requests
-	SubscribeLocRequests() (chan api.Loc, context.CancelFunc)
+	SubscribeLocRequests(enabled bool) (chan api.Loc, context.CancelFunc)
 	// Subscribe to loc actuals
-	SubscribeLocActuals() (chan api.Loc, context.CancelFunc)
+	SubscribeLocActuals(enabled bool) (chan api.Loc, context.CancelFunc)
 
 	// Set the requested output state
 	SetOutputRequest(x api.Output)
 	// Set the actual output state
 	SetOutputActual(x api.Output)
 	// Subscribe to output requests
-	SubscribeOutputRequests() (chan api.Output, context.CancelFunc)
+	SubscribeOutputRequests(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 	// Subscribe to output actuals
-	SubscribeOutputActuals() (chan api.Output, context.CancelFunc)
+	SubscribeOutputActuals(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 
 	// Set the actual sensor state
 	SetSensorActual(x api.Sensor)
 	// Subscribe to sensor actuals
-	SubscribeSensorActuals() (chan api.Sensor, context.CancelFunc)
+	SubscribeSensorActuals(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc)
 
 	// Set the requested switch state
 	SetSwitchRequest(x api.Switch)
 	// Set the actual switch state
 	SetSwitchActual(x api.Switch)
 	// Subscribe to switch requests
-	SubscribeSwitchRequests() (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchRequests(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 	// Subscribe to switch actuals
-	SubscribeSwitchActuals() (chan api.Switch, context.CancelFunc)
+	SubscribeSwitchActuals(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 
 	// Set the actual clock state
 	SetClockActual(x api.Clock)
 	// Subscribe to clock actuals
-	SubscribeClockActuals() (chan api.Clock, context.CancelFunc)
+	SubscribeClockActuals(enabled bool) (chan api.Clock, context.CancelFunc)
 }
 
 // Dependencies of the manager.
 type Dependencies struct {
 	Log zerolog.Logger
 
-	// Local worker registry
-	ConfigRegistry config.Registry
 	// Reconfiguration queue (chan localWorkerID).
 	// The manager must listen to entries in this queue and reconfigure
 	// when it receives a local worker ID.
@@ -167,14 +172,24 @@ func (m *manager) GetAllLocalWorkers() []api.LocalWorkerInfo {
 	return m.localWorkerPool.GetAll()
 }
 
-// SubscribeLocalWorkerUpdates is used to subscribe to updates of all local workers.
-func (m *manager) SubscribeLocalWorkerUpdates() (chan api.LocalWorkerInfo, context.CancelFunc) {
-	return m.localWorkerPool.SubUpdates()
+// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
+func (m *manager) SubscribeLocalWorkerRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubRequests(enabled, filter)
 }
 
-// SetLocalWorkerUpdate informs the pool and its listeners of a local worker update.
-func (m *manager) SetLocalWorkerUpdate(ctx context.Context, info api.LocalWorkerInfo) {
-	m.localWorkerPool.SetUpdate(ctx, info)
+// SubscribeLocalWorkerActuals is used to subscribe to actual changes of local workers.
+func (m *manager) SubscribeLocalWorkerActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	return m.localWorkerPool.SubActuals(enabled, filter)
+}
+
+// SetLocalWorkerRequest sets the requested state of a local worker
+func (m *manager) SetLocalWorkerRequest(ctx context.Context, lw api.LocalWorker) error {
+	return m.localWorkerPool.SetRequest(ctx, lw)
+}
+
+// SetLocalWorkerActual sets the actual state of a local worker
+func (m *manager) SetLocalWorkerActual(ctx context.Context, lw api.LocalWorker) error {
+	return m.localWorkerPool.SetActual(ctx, lw)
 }
 
 // Trigger a discovery and wait for the response.
@@ -183,14 +198,24 @@ func (m *manager) Discover(ctx context.Context, id string) (*api.DiscoverResult,
 	return m.discoverPool.Trigger(ctx, id)
 }
 
-// Subscribe to power requests
-func (m *manager) SubscribeDiscoverRequests(id string) (chan api.DiscoverRequest, context.CancelFunc) {
-	return m.discoverPool.SubRequest(id)
+// Trigger a discovery.
+func (m *manager) SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error {
+	return m.discoverPool.SetDiscoverRequest(req)
 }
 
-// SetDiscoverResult is called by the local worker in response to discover requests.
-func (m *manager) SetDiscoverResult(ctx context.Context, req api.DiscoverResult) error {
+// SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
+func (m *manager) SetDevicesDiscoveryActual(ctx context.Context, req api.DeviceDiscovery) error {
 	return m.discoverPool.SetDiscoverResult(req)
+}
+
+// Subscribe to discovery requests
+func (m *manager) SubscribeDiscoverRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	return m.discoverPool.SubRequests(enabled, id)
+}
+
+// Subscribe to discovery actuals
+func (m *manager) SubscribeDiscoverActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	return m.discoverPool.SubActuals(enabled, id)
 }
 
 // Set the requested power state
@@ -204,13 +229,13 @@ func (m *manager) SetPowerActual(x api.PowerState) {
 }
 
 // Subscribe to power requests
-func (m *manager) SubscribePowerRequests() (chan api.Power, context.CancelFunc) {
-	return m.powerPool.SubRequest()
+func (m *manager) SubscribePowerRequests(enabled bool) (chan api.Power, context.CancelFunc) {
+	return m.powerPool.SubRequest(enabled)
 }
 
 // Subscribe to power actuals
-func (m *manager) SubscribePowerActuals() (chan api.Power, context.CancelFunc) {
-	return m.powerPool.SubActual()
+func (m *manager) SubscribePowerActuals(enabled bool) (chan api.Power, context.CancelFunc) {
+	return m.powerPool.SubActual(enabled)
 }
 
 // Set the requested loc state
@@ -224,13 +249,13 @@ func (m *manager) SetLocActual(x api.Loc) {
 }
 
 // Subscribe to loc requests
-func (m *manager) SubscribeLocRequests() (chan api.Loc, context.CancelFunc) {
-	return m.locPool.SubRequest()
+func (m *manager) SubscribeLocRequests(enabled bool) (chan api.Loc, context.CancelFunc) {
+	return m.locPool.SubRequest(enabled)
 }
 
 // Subscribe to loc actuals
-func (m *manager) SubscribeLocActuals() (chan api.Loc, context.CancelFunc) {
-	return m.locPool.SubActual()
+func (m *manager) SubscribeLocActuals(enabled bool) (chan api.Loc, context.CancelFunc) {
+	return m.locPool.SubActual(enabled)
 }
 
 // Set the requested output state
@@ -244,13 +269,13 @@ func (m *manager) SetOutputActual(x api.Output) {
 }
 
 // Subscribe to output requests
-func (m *manager) SubscribeOutputRequests() (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubRequest()
+func (m *manager) SubscribeOutputRequests(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubRequest(enabled, filter)
 }
 
 // Subscribe to output actuals
-func (m *manager) SubscribeOutputActuals() (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubActual()
+func (m *manager) SubscribeOutputActuals(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	return m.outputPool.SubActual(enabled, filter)
 }
 
 // Set the actual sensor state
@@ -259,8 +284,8 @@ func (m *manager) SetSensorActual(x api.Sensor) {
 }
 
 // Subscribe to sensor actuals
-func (m *manager) SubscribeSensorActuals() (chan api.Sensor, context.CancelFunc) {
-	return m.sensorPool.SubActual()
+func (m *manager) SubscribeSensorActuals(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
+	return m.sensorPool.SubActual(enabled, filter)
 }
 
 // Set the requested switch state
@@ -274,13 +299,13 @@ func (m *manager) SetSwitchActual(x api.Switch) {
 }
 
 // Subscribe to switch requests
-func (m *manager) SubscribeSwitchRequests() (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubRequest()
+func (m *manager) SubscribeSwitchRequests(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubRequest(enabled, filter)
 }
 
 // Subscribe to switch actuals
-func (m *manager) SubscribeSwitchActuals() (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubActual()
+func (m *manager) SubscribeSwitchActuals(enabled bool, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	return m.switchPool.SubActual(enabled, filter)
 }
 
 // Set the actual clock state
@@ -289,6 +314,6 @@ func (m *manager) SetClockActual(x api.Clock) {
 }
 
 // Subscribe to clock actuals
-func (m *manager) SubscribeClockActuals() (chan api.Clock, context.CancelFunc) {
-	return m.clockPool.SubActual()
+func (m *manager) SubscribeClockActuals(enabled bool) (chan api.Clock, context.CancelFunc) {
+	return m.clockPool.SubActual(enabled)
 }

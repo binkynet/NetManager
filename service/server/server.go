@@ -23,8 +23,6 @@ type Server interface {
 
 // Service ('s) that we offer
 type Service interface {
-	api.LocalWorkerConfigServiceServer
-	api.LocalWorkerControlServiceServer
 	api.NetworkControlServiceServer
 }
 
@@ -74,8 +72,6 @@ func (s *server) Run(ctx context.Context) error {
 		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
 	)
-	api.RegisterLocalWorkerConfigServiceServer(grpcSrv, s.api)
-	api.RegisterLocalWorkerControlServiceServer(grpcSrv, s.api)
 	api.RegisterNetworkControlServiceServer(grpcSrv, s.api)
 	// Register reflection service on gRPC server.
 	reflection.Register(grpcSrv)
@@ -89,20 +85,6 @@ func (s *server) Run(ctx context.Context) error {
 			return err
 		}
 		return nil
-	})
-	g.Go(func() error {
-		return api.RegisterServiceEntry(nctx, api.ServiceTypeLocalWorkerConfig, api.ServiceInfo{
-			ApiVersion: "v1",
-			ApiPort:    int32(s.GRPCPort),
-			Secure:     false,
-		})
-	})
-	g.Go(func() error {
-		return api.RegisterServiceEntry(nctx, api.ServiceTypeLocalWorkerControl, api.ServiceInfo{
-			ApiVersion: "v1",
-			ApiPort:    int32(s.GRPCPort),
-			Secure:     false,
-		})
 	})
 	g.Go(func() error {
 		return api.RegisterServiceEntry(nctx, api.ServiceTypeNetworkControl, api.ServiceInfo{

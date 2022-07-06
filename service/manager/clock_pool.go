@@ -17,6 +17,7 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
@@ -44,14 +45,21 @@ func (p *clockPool) SetActual(x api.Clock) {
 	p.actualChanges.Pub(p.clock.Clone())
 }
 
-func (p *clockPool) SubActual() (chan api.Clock, context.CancelFunc) {
+func (p *clockPool) SubActual(enabled bool) (chan api.Clock, context.CancelFunc) {
 	c := make(chan api.Clock)
-	cb := func(msg *api.Clock) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		cb := func(msg *api.Clock) {
+			msg.Unixtime = time.Now().Unix()
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

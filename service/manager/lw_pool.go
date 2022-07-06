@@ -16,6 +16,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -26,22 +27,24 @@ import (
 )
 
 type localWorkerPool struct {
-	log     zerolog.Logger
-	mutex   sync.RWMutex
-	updates *pubsub.PubSub
-	workers map[string]localWorkerEntry
+	log      zerolog.Logger
+	mutex    sync.RWMutex
+	requests *pubsub.PubSub
+	actuals  *pubsub.PubSub
+	workers  map[string]*localWorkerEntry
 }
 
 type localWorkerEntry struct {
-	api.LocalWorkerInfo
-	lastUpdatedAt time.Time
+	api.LocalWorker
+	lastUpdatedActualAt time.Time
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
 	return &localWorkerPool{
-		log:     log,
-		updates: pubsub.New(),
-		workers: make(map[string]localWorkerEntry),
+		log:      log,
+		requests: pubsub.New(),
+		actuals:  pubsub.New(),
+		workers:  make(map[string]*localWorkerEntry),
 	}
 }
 
@@ -51,8 +54,12 @@ func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, time.Time, bo
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
-	info, found := p.workers[id]
-	return info.LocalWorkerInfo, info.lastUpdatedAt, found
+	if lw, found := p.workers[id]; found {
+		if info := lw.GetActual(); info != nil {
+			return *info, lw.lastUpdatedActualAt, found
+		}
+	}
+	return api.LocalWorkerInfo{}, time.Time{}, false
 }
 
 // GetAll fetches the last known info for all local workers.
@@ -61,8 +68,10 @@ func (p *localWorkerPool) GetAll() []api.LocalWorkerInfo {
 	defer p.mutex.RUnlock()
 
 	result := make([]api.LocalWorkerInfo, 0, len(p.workers))
-	for _, info := range p.workers {
-		result = append(result, info.LocalWorkerInfo)
+	for _, entry := range p.workers {
+		if actual := entry.GetActual(); actual != nil {
+			result = append(result, *actual)
+		}
 	}
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].Id < result[j].Id
@@ -70,27 +79,118 @@ func (p *localWorkerPool) GetAll() []api.LocalWorkerInfo {
 	return result
 }
 
-// SetUpdate informs the pool and its listeners of a local worker update.
-func (p *localWorkerPool) SetUpdate(ctx context.Context, info api.LocalWorkerInfo) {
+// GetAllWorkers fetches the last known state for all local workers.
+func (p *localWorkerPool) GetAllWorkers() []api.LocalWorker {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	result := make([]api.LocalWorker, 0, len(p.workers))
+	for _, entry := range p.workers {
+		result = append(result, entry.LocalWorker)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Id < result[j].Id
+	})
+	return result
+}
+
+// SetRequest sets the requested state of a local worker
+func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) error {
+	req := lw.GetRequest()
+	if req == nil {
+		return fmt.Errorf("Request missing")
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	p.workers[info.GetId()] = localWorkerEntry{
-		LocalWorkerInfo: info,
-		lastUpdatedAt:   time.Now(),
+	id := lw.GetId()
+	entry, found := p.workers[id]
+	if !found {
+		entry = &localWorkerEntry{}
+		entry.LocalWorker.Id = id
+		p.workers[id] = entry
 	}
-	p.updates.Pub(info)
+	entry.LocalWorker.Request = req.Clone()
+	// Set hash
+	entry.LocalWorker.Request.Hash = req.Sha1()
+	// Do not change last updated at
+	p.requests.Pub(entry.LocalWorker)
+	return nil
 }
 
-// SubUpdates is used to subscribe to updates of all local workers.
-func (p *localWorkerPool) SubUpdates() (chan api.LocalWorkerInfo, context.CancelFunc) {
-	c := make(chan api.LocalWorkerInfo)
-	cb := func(msg api.LocalWorkerInfo) {
-		c <- msg
+// SetActual sets the actual state of a local worker
+func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	id := lw.GetId()
+	entry, found := p.workers[id]
+	if !found {
+		entry = &localWorkerEntry{}
+		entry.LocalWorker.Id = id
+		p.workers[id] = entry
 	}
-	p.updates.Sub(cb)
-	return c, func() {
-		p.updates.Leave(cb)
-		close(c)
+	entry.LocalWorker.Actual = lw.GetActual().Clone()
+	entry.lastUpdatedActualAt = time.Now()
+	p.actuals.Pub(entry.LocalWorker)
+	return nil
+}
+
+// SubRequests is used to subscribe to all request changes of local workers.
+func (p *localWorkerPool) SubRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	c := make(chan api.LocalWorker)
+	if enabled {
+		// Subscribe
+		cb := func(msg api.LocalWorker) {
+			if msg.Request != nil && filter.MatchesModuleID(msg.GetId()) {
+				msg.Request.Unixtime = time.Now().Unix()
+				c <- msg
+			}
+		}
+		p.requests.Sub(cb)
+		// Push all known request states
+		for _, lw := range p.GetAllWorkers() {
+			if lw.GetRequest() != nil && filter.MatchesModuleID(lw.GetId()) {
+				p.requests.Pub(lw)
+			}
+		}
+		return c, func() {
+			p.requests.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
+	}
+}
+
+// SubActuals is used to subscribe to actual changes of local workers.
+func (p *localWorkerPool) SubActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	c := make(chan api.LocalWorker)
+	if enabled {
+		cb := func(msg api.LocalWorker) {
+			if filter.MatchesModuleID(msg.GetId()) {
+				if msg.Request != nil {
+					msg.Request.Unixtime = time.Now().Unix()
+				}
+				c <- msg
+			}
+		}
+		p.actuals.Sub(cb)
+		// Push all known actual states
+		for _, lw := range p.GetAllWorkers() {
+			if lw.GetActual() != nil && filter.MatchesModuleID(lw.GetId()) {
+				p.actuals.Pub(lw)
+			}
+		}
+		return c, func() {
+			p.actuals.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

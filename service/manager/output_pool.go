@@ -71,26 +71,62 @@ func (p *outputPool) SetActual(x api.Output) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *outputPool) SubRequest() (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubRequest(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
-	cb := func(msg *api.Output) {
-		c <- *msg
-	}
-	p.requestChanges.Sub(cb)
-	return c, func() {
-		p.requestChanges.Leave(cb)
-		close(c)
+	if enabled {
+		// Subscribe
+		cb := func(msg *api.Output) {
+			if filter.Matches(msg.GetAddress()) {
+				c <- *msg
+			}
+		}
+		p.requestChanges.Sub(cb)
+		// Publish all known request states
+		p.mutex.RLock()
+		for _, output := range p.entries {
+			if output.GetRequest() != nil && filter.Matches(output.GetAddress()) {
+				p.requestChanges.Sub(output.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
+		return c, func() {
+			p.requestChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
-func (p *outputPool) SubActual() (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
-	cb := func(msg *api.Output) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		// Subscribe
+		cb := func(msg *api.Output) {
+			if filter.Matches(msg.GetAddress()) {
+				c <- *msg
+			}
+		}
+		p.actualChanges.Sub(cb)
+		// Publish all known actual states
+		p.mutex.RLock()
+		for _, output := range p.entries {
+			if output.GetActual() != nil && filter.Matches(output.GetAddress()) {
+				p.actualChanges.Sub(output.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }

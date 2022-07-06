@@ -16,6 +16,7 @@ package manager
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
@@ -40,17 +41,25 @@ func newDiscoverPool(log zerolog.Logger) *discoverPool {
 }
 
 type discoverRequest struct {
-	id string
+	id        string
+	requestID int32
 }
 
 // Trigger a discovery and wait for the response.
 func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverResult, error) {
 	// Subscribe to results
-	resultChan, cancel := p.subResponse()
+	resultChan, cancel := p.SubActuals(true, id)
 	defer cancel()
 
 	// Trigger discover
 	p.log.Debug().Str("id", id).Msg("discoverPool.Pub")
+	requestID := rand.Int31()
+	p.SetDiscoverRequest(api.DeviceDiscovery{
+		Id: id,
+		Request: &api.DiscoverRequest{
+			RequestId: requestID,
+		},
+	})
 	p.requests.Pub(&discoverRequest{id: id})
 
 	// Wait for response
@@ -59,7 +68,7 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 		case msg := <-resultChan:
 			p.log.Debug().Str("id", msg.GetId()).Msg("Received result")
 			if msg.GetId() == id {
-				return &msg, nil
+				return msg.GetActual(), nil
 			}
 		case <-ctx.Done():
 			// Context canceled
@@ -68,38 +77,58 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 	}
 }
 
-// SubRequest is called by the LocalWorker GRPC API to wait for discover requests.
-func (p *discoverPool) SubRequest(id string) (chan api.DiscoverRequest, context.CancelFunc) {
-	c := make(chan api.DiscoverRequest)
-	cb := func(msg *discoverRequest) {
-		if msg.id == id {
-			c <- api.DiscoverRequest{}
-		} else {
-			p.log.Debug().Str("msg_id", msg.id).Msg("Skipping message for other localworker")
+// SubRequests is called by the LocalWorker GRPC API to wait for discover requests.
+func (p *discoverPool) SubRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	c := make(chan api.DeviceDiscovery)
+	if enabled {
+		cb := func(msg api.DeviceDiscovery) {
+			if id == "" || msg.GetId() == id {
+				c <- msg
+			} else {
+				p.log.Debug().Str("msg_id", msg.GetId()).Msg("Skipping message for other localworker")
+			}
 		}
-	}
-	p.requests.Sub(cb)
-	return c, func() {
-		p.requests.Leave(cb)
-		close(c)
+		p.requests.Sub(cb)
+		return c, func() {
+			p.requests.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
 // subResponse is called by Trigger.
-func (p *discoverPool) subResponse() (chan api.DiscoverResult, context.CancelFunc) {
-	c := make(chan api.DiscoverResult)
-	cb := func(msg api.DiscoverResult) {
-		c <- msg
-	}
-	p.responses.Sub(cb)
-	return c, func() {
-		p.responses.Leave(cb)
-		close(c)
+func (p *discoverPool) SubActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	c := make(chan api.DeviceDiscovery)
+	if enabled {
+		cb := func(msg api.DeviceDiscovery) {
+			if id == "" || msg.GetId() == id {
+				c <- msg
+			}
+		}
+		p.responses.Sub(cb)
+		return c, func() {
+			p.responses.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
+// SetDiscoverRequest triggers a discovery request
+func (p *discoverPool) SetDiscoverRequest(req api.DeviceDiscovery) error {
+	p.requests.Pub(req)
+	return nil
+}
+
 // SetDiscoverResult is called by the local worker in response to discover requests.
-func (p *discoverPool) SetDiscoverResult(req api.DiscoverResult) error {
+func (p *discoverPool) SetDiscoverResult(req api.DeviceDiscovery) error {
 	p.responses.Pub(req)
 	return nil
 }

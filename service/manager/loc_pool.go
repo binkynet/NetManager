@@ -66,26 +66,58 @@ func (p *locPool) SetActual(x api.Loc) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *locPool) SubRequest() (chan api.Loc, context.CancelFunc) {
+func (p *locPool) SubRequest(enabled bool) (chan api.Loc, context.CancelFunc) {
 	c := make(chan api.Loc)
-	cb := func(msg *api.Loc) {
-		c <- *msg
-	}
-	p.requestChanges.Sub(cb)
-	return c, func() {
-		p.requestChanges.Leave(cb)
-		close(c)
+	if enabled {
+		// Subscribe to requests
+		cb := func(msg *api.Loc) {
+			c <- *msg
+		}
+		p.requestChanges.Sub(cb)
+		// Publish all known request states
+		p.mutex.RLock()
+		for _, loc := range p.entries {
+			if loc.GetRequest() != nil {
+				p.requestChanges.Sub(loc.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
+		return c, func() {
+			p.requestChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
 
-func (p *locPool) SubActual() (chan api.Loc, context.CancelFunc) {
+func (p *locPool) SubActual(enabled bool) (chan api.Loc, context.CancelFunc) {
 	c := make(chan api.Loc)
-	cb := func(msg *api.Loc) {
-		c <- *msg
-	}
-	p.actualChanges.Sub(cb)
-	return c, func() {
-		p.actualChanges.Leave(cb)
-		close(c)
+	if enabled {
+		// Subscribe
+		cb := func(msg *api.Loc) {
+			c <- *msg
+		}
+		p.actualChanges.Sub(cb)
+		// Publish all known actual states
+		p.mutex.RLock()
+		for _, loc := range p.entries {
+			if loc.GetActual() != nil {
+				p.actualChanges.Sub(loc.Clone())
+			}
+		}
+		p.mutex.RUnlock()
+		// Return channel & cancel function
+		return c, func() {
+			p.actualChanges.Leave(cb)
+			close(c)
+		}
+	} else {
+		return c, func() {
+			close(c)
+		}
 	}
 }
