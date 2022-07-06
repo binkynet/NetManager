@@ -23,8 +23,6 @@ import (
 
 // Service is the API exposed by this service.
 type Service interface {
-	model.LocalWorkerConfigServiceServer
-	model.LocalWorkerControlServiceServer
 	model.NetworkControlServiceServer
 }
 
