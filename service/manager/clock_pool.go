@@ -17,6 +17,7 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
@@ -48,6 +49,7 @@ func (p *clockPool) SubActual(enabled bool) (chan api.Clock, context.CancelFunc)
 	c := make(chan api.Clock)
 	if enabled {
 		cb := func(msg *api.Clock) {
+			msg.Unixtime = time.Now().Unix()
 			c <- *msg
 		}
 		p.actualChanges.Sub(cb)

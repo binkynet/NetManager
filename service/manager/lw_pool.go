@@ -16,6 +16,7 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -95,6 +96,10 @@ func (p *localWorkerPool) GetAllWorkers() []api.LocalWorker {
 
 // SetRequest sets the requested state of a local worker
 func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) error {
+	req := lw.GetRequest()
+	if req == nil {
+		return fmt.Errorf("Request missing")
+	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -105,9 +110,11 @@ func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) er
 		entry.LocalWorker.Id = id
 		p.workers[id] = entry
 	}
-	entry.LocalWorker.Request = lw.GetRequest().Clone()
+	entry.LocalWorker.Request = req.Clone()
+	// Set hash
+	entry.LocalWorker.Request.Hash = req.Sha1()
 	// Do not change last updated at
-	p.actuals.Pub(entry.LocalWorker)
+	p.requests.Pub(entry.LocalWorker)
 	return nil
 }
 
@@ -135,7 +142,8 @@ func (p *localWorkerPool) SubRequests(enabled bool, filter ModuleFilter) (chan a
 	if enabled {
 		// Subscribe
 		cb := func(msg api.LocalWorker) {
-			if filter.MatchesModuleID(msg.GetId()) {
+			if msg.Request != nil && filter.MatchesModuleID(msg.GetId()) {
+				msg.Request.Unixtime = time.Now().Unix()
 				c <- msg
 			}
 		}
@@ -163,6 +171,9 @@ func (p *localWorkerPool) SubActuals(enabled bool, filter ModuleFilter) (chan ap
 	if enabled {
 		cb := func(msg api.LocalWorker) {
 			if filter.MatchesModuleID(msg.GetId()) {
+				if msg.Request != nil {
+					msg.Request.Unixtime = time.Now().Unix()
+				}
 				c <- msg
 			}
 		}
