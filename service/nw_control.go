@@ -50,10 +50,12 @@ func (s *service) WatchLocalWorkers(req *api.WatchOptions, server api.NetworkCon
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send local worker actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send local worker request failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -90,10 +92,12 @@ func (s *service) WatchDeviceDiscoveries(req *api.WatchOptions, server api.Netwo
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send device discovery actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send device discovery request failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -124,10 +128,12 @@ func (s *service) WatchPower(req *api.WatchOptions, server api.NetworkControlSer
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send power actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send power request failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -157,10 +163,12 @@ func (s *service) WatchLocs(req *api.WatchOptions, server api.NetworkControlServ
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send loc actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send loc request failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -183,6 +191,7 @@ func (s *service) WatchSensors(req *api.WatchOptions, server api.NetworkControlS
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send sensor actual failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -212,10 +221,12 @@ func (s *service) WatchOutputs(req *api.WatchOptions, server api.NetworkControlS
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send output actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send output request failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -245,10 +256,12 @@ func (s *service) WatchSwitches(req *api.WatchOptions, server api.NetworkControl
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send switch actual failed")
 				return err
 			}
 		case msg := <-rch:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send request actual failed")
 				return err
 			}
 		case <-ctx.Done():
@@ -273,6 +286,7 @@ func (s *service) WatchClock(req *api.WatchOptions, server api.NetworkControlSer
 		select {
 		case msg := <-ach:
 			if err := server.Send(&msg); err != nil {
+				s.Log.Warn().Err(err).Msg("Send clock actual failed")
 				return err
 			}
 		case <-ctx.Done():
