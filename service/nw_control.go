@@ -16,6 +16,7 @@ package service
 
 import (
 	"context"
+	"net"
 
 	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
@@ -37,6 +38,7 @@ func (s *service) SetLocalWorkerActual(ctx context.Context, req *api.LocalWorker
 	var remoteAddr string
 	if pr, ok := peer.FromContext(ctx); ok {
 		remoteAddr = pr.Addr.String()
+		remoteAddr, _, _ = net.SplitHostPort(remoteAddr)
 	}
 	if err := s.Manager.SetLocalWorkerActual(ctx, *req, remoteAddr); err != nil {
 		return nil, err
