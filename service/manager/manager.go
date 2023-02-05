@@ -29,8 +29,8 @@ type Manager interface {
 	Run(ctx context.Context) error
 
 	// GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
-	// Returns: info, lastUpdatedAt, found
-	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool)
+	// Returns: info, remoteAddr, lastUpdatedAt, found
+	GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, string, time.Time, bool)
 	// GetAllLocalWorkers fetches the last known info for all local workers.
 	GetAllLocalWorkers() []api.LocalWorkerInfo
 	// SubscribeLocalWorkerRequests is used to subscribe to requested changes of local workers.
@@ -40,7 +40,7 @@ type Manager interface {
 	// SetLocalWorkerRequest sets the requested state of a local worker
 	SetLocalWorkerRequest(ctx context.Context, info api.LocalWorker) error
 	// SetLocalWorkerActual sets the actual state of a local worker
-	SetLocalWorkerActual(ctx context.Context, info api.LocalWorker) error
+	SetLocalWorkerActual(ctx context.Context, info api.LocalWorker, remoteAddr string) error
 
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
@@ -163,7 +163,7 @@ func (m *manager) Run(ctx context.Context) error {
 
 // GetLocalWorkerInfo fetches the last known info for a local worker with given ID.
 // Returns: LWinfo, LastUpdatedAt, found
-func (m *manager) GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, time.Time, bool) {
+func (m *manager) GetLocalWorkerInfo(id string) (api.LocalWorkerInfo, string, time.Time, bool) {
 	return m.localWorkerPool.GetInfo(id)
 }
 
@@ -188,8 +188,8 @@ func (m *manager) SetLocalWorkerRequest(ctx context.Context, lw api.LocalWorker)
 }
 
 // SetLocalWorkerActual sets the actual state of a local worker
-func (m *manager) SetLocalWorkerActual(ctx context.Context, lw api.LocalWorker) error {
-	return m.localWorkerPool.SetActual(ctx, lw)
+func (m *manager) SetLocalWorkerActual(ctx context.Context, lw api.LocalWorker, remoteAddr string) error {
+	return m.localWorkerPool.SetActual(ctx, lw, remoteAddr)
 }
 
 // Trigger a discovery and wait for the response.

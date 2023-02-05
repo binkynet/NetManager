@@ -35,6 +35,7 @@ type localWorkerPool struct {
 }
 
 type localWorkerEntry struct {
+	remoteAddr string
 	api.LocalWorker
 	lastUpdatedActualAt time.Time
 }
@@ -49,17 +50,17 @@ func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
 }
 
 // GetInfo fetches the last known info for a local worker with given ID.
-// Returns: info, lastUpdatedAt, found
-func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, time.Time, bool) {
+// Returns: info, remoteAddr, lastUpdatedAt, found
+func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, string, time.Time, bool) {
 	p.mutex.RLock()
 	defer p.mutex.RUnlock()
 
 	if lw, found := p.workers[id]; found {
 		if info := lw.GetActual(); info != nil {
-			return *info, lw.lastUpdatedActualAt, found
+			return *info, lw.remoteAddr, lw.lastUpdatedActualAt, found
 		}
 	}
-	return api.LocalWorkerInfo{}, time.Time{}, false
+	return api.LocalWorkerInfo{}, "", time.Time{}, false
 }
 
 // GetAll fetches the last known info for all local workers.
@@ -119,7 +120,7 @@ func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) er
 }
 
 // SetActual sets the actual state of a local worker
-func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker) error {
+func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, remoteAddr string) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -130,6 +131,7 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker) err
 		entry.LocalWorker.Id = id
 		p.workers[id] = entry
 	}
+	entry.remoteAddr = remoteAddr
 	entry.LocalWorker.Actual = lw.GetActual().Clone()
 	entry.lastUpdatedActualAt = time.Now()
 	p.actuals.Pub(entry.LocalWorker)

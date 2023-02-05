@@ -21,6 +21,7 @@ import (
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/manager"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/peer"
 )
 
 // Set the requested local worker state
@@ -33,7 +34,11 @@ func (s *service) SetLocalWorkerRequest(ctx context.Context, req *api.LocalWorke
 
 // Set the actual local worker state
 func (s *service) SetLocalWorkerActual(ctx context.Context, req *api.LocalWorker) (*api.Empty, error) {
-	if err := s.Manager.SetLocalWorkerActual(ctx, *req); err != nil {
+	var remoteAddr string
+	if pr, ok := peer.FromContext(ctx); ok {
+		remoteAddr = pr.Addr.String()
+	}
+	if err := s.Manager.SetLocalWorkerActual(ctx, *req, remoteAddr); err != nil {
 		return nil, err
 	}
 	return &api.Empty{}, nil
