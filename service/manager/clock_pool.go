@@ -21,16 +21,19 @@ import (
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type clockPool struct {
 	mutex         sync.RWMutex
+	log           zerolog.Logger
 	clock         api.Clock
 	actualChanges *pubsub.PubSub
 }
 
-func newClockPool() *clockPool {
+func newClockPool(log zerolog.Logger) *clockPool {
 	return &clockPool{
+		log:           log.With().Str("pool", "clock").Logger(),
 		actualChanges: pubsub.New(),
 	}
 }
@@ -45,12 +48,19 @@ func (p *clockPool) SetActual(x api.Clock) {
 	p.actualChanges.Pub(p.clock.Clone())
 }
 
-func (p *clockPool) SubActual(enabled bool) (chan api.Clock, context.CancelFunc) {
+func (p *clockPool) SubActual(enabled bool, timeout time.Duration) (chan api.Clock, context.CancelFunc) {
 	c := make(chan api.Clock)
 	if enabled {
 		cb := func(msg *api.Clock) {
 			msg.Unixtime = time.Now().Unix()
-			c <- *msg
+			select {
+			case c <- *msg:
+				// Done
+			case <-time.After(timeout):
+				p.log.Error().
+					Dur("timeout", timeout).
+					Msg("Failed to deliver clock actual to channel")
+			}
 		}
 		p.actualChanges.Sub(cb)
 		return c, func() {

@@ -17,20 +17,24 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type sensorPool struct {
 	mutex         sync.RWMutex
+	log           zerolog.Logger
 	entries       map[api.ObjectAddress]*api.Sensor
 	actualChanges *pubsub.PubSub
 }
 
-func newSensorPool() *sensorPool {
+func newSensorPool(log zerolog.Logger) *sensorPool {
 	return &sensorPool{
 		entries:       make(map[api.ObjectAddress]*api.Sensor),
+		log:           log.With().Str("pool", "sensor").Logger(),
 		actualChanges: pubsub.New(),
 	}
 }
@@ -49,13 +53,21 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *sensorPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
+func (p *sensorPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
 	c := make(chan api.Sensor)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Sensor) {
 			if filter.Matches(msg.GetAddress()) {
-				c <- *msg
+				select {
+				case c <- *msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Str("address", string(msg.GetAddress())).
+						Msg("Failed to deliver sensor actual to channel")
+				}
 			}
 		}
 		p.actualChanges.Sub(cb)
@@ -63,7 +75,7 @@ func (p *sensorPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Sens
 		p.mutex.RLock()
 		for _, sensor := range p.entries {
 			if sensor.GetActual() != nil && filter.Matches(sensor.GetAddress()) {
-				p.actualChanges.Sub(sensor.Clone())
+				cb(sensor.Clone())
 			}
 		}
 		p.mutex.RUnlock()

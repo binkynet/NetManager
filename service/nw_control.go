@@ -17,12 +17,17 @@ package service
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/manager"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/peer"
+)
+
+const (
+	chanTimeout = time.Second * 5
 )
 
 // Set the requested local worker state
@@ -49,9 +54,9 @@ func (s *service) SetLocalWorkerActual(ctx context.Context, req *api.LocalWorker
 // Watch local worker changes
 func (s *service) WatchLocalWorkers(req *api.WatchOptions, server api.NetworkControlService_WatchLocalWorkersServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeLocalWorkerActuals(req.GetWatchActualChanges(), manager.ModuleFilter(req.GetModuleId()))
+	ach, acancel := s.Manager.SubscribeLocalWorkerActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribeLocalWorkerRequests(req.GetWatchRequestChanges(), manager.ModuleFilter(req.GetModuleId()))
+	rch, rcancel := s.Manager.SubscribeLocalWorkerRequests(req.GetWatchRequestChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer rcancel()
 	for {
 		select {
@@ -91,9 +96,9 @@ func (s *service) SetDeviceDiscoveryActual(ctx context.Context, req *api.DeviceD
 // Watch device discovery changes
 func (s *service) WatchDeviceDiscoveries(req *api.WatchOptions, server api.NetworkControlService_WatchDeviceDiscoveriesServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeDiscoverRequests(req.GetWatchActualChanges(), req.GetModuleId())
+	ach, acancel := s.Manager.SubscribeDiscoverRequests(req.GetWatchActualChanges(), chanTimeout, req.GetModuleId())
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribeDiscoverActuals(req.GetWatchRequestChanges(), req.GetModuleId())
+	rch, rcancel := s.Manager.SubscribeDiscoverActuals(req.GetWatchRequestChanges(), chanTimeout, req.GetModuleId())
 	defer rcancel()
 	for {
 		select {
@@ -127,9 +132,9 @@ func (s *service) SetPowerActual(ctx context.Context, req *api.PowerState) (*api
 
 func (s *service) WatchPower(req *api.WatchOptions, server api.NetworkControlService_WatchPowerServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribePowerActuals(req.GetWatchActualChanges())
+	ach, acancel := s.Manager.SubscribePowerActuals(req.GetWatchActualChanges(), chanTimeout)
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribePowerRequests(req.GetWatchRequestChanges())
+	rch, rcancel := s.Manager.SubscribePowerRequests(req.GetWatchRequestChanges(), chanTimeout)
 	defer rcancel()
 	for {
 		select {
@@ -162,9 +167,9 @@ func (s *service) SetLocActual(ctx context.Context, req *api.Loc) (*api.Empty, e
 
 func (s *service) WatchLocs(req *api.WatchOptions, server api.NetworkControlService_WatchLocsServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeLocActuals(req.GetWatchActualChanges())
+	ach, acancel := s.Manager.SubscribeLocActuals(req.GetWatchActualChanges(), chanTimeout)
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribeLocRequests(req.GetWatchRequestChanges())
+	rch, rcancel := s.Manager.SubscribeLocRequests(req.GetWatchRequestChanges(), chanTimeout)
 	defer rcancel()
 	for {
 		select {
@@ -192,7 +197,7 @@ func (s *service) SetSensorActual(ctx context.Context, req *api.Sensor) (*api.Em
 
 func (s *service) WatchSensors(req *api.WatchOptions, server api.NetworkControlService_WatchSensorsServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeSensorActuals(req.GetWatchActualChanges(), manager.ModuleFilter(req.GetModuleId()))
+	ach, acancel := s.Manager.SubscribeSensorActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer acancel()
 	for {
 		select {
@@ -220,9 +225,9 @@ func (s *service) SetOutputActual(ctx context.Context, req *api.Output) (*api.Em
 
 func (s *service) WatchOutputs(req *api.WatchOptions, server api.NetworkControlService_WatchOutputsServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeOutputActuals(req.GetWatchActualChanges(), manager.ModuleFilter(req.GetModuleId()))
+	ach, acancel := s.Manager.SubscribeOutputActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribeOutputRequests(req.GetWatchRequestChanges(), manager.ModuleFilter(req.GetModuleId()))
+	rch, rcancel := s.Manager.SubscribeOutputRequests(req.GetWatchRequestChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer rcancel()
 	for {
 		select {
@@ -255,9 +260,9 @@ func (s *service) SetSwitchActual(ctx context.Context, req *api.Switch) (*api.Em
 
 func (s *service) WatchSwitches(req *api.WatchOptions, server api.NetworkControlService_WatchSwitchesServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeSwitchActuals(req.GetWatchActualChanges(), manager.ModuleFilter(req.GetModuleId()))
+	ach, acancel := s.Manager.SubscribeSwitchActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer acancel()
-	rch, rcancel := s.Manager.SubscribeSwitchRequests(req.GetWatchRequestChanges(), manager.ModuleFilter(req.GetModuleId()))
+	rch, rcancel := s.Manager.SubscribeSwitchRequests(req.GetWatchRequestChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
 	defer rcancel()
 	for {
 		select {
@@ -287,7 +292,7 @@ func (s *service) SetClockActual(ctx context.Context, req *api.Clock) (*api.Empt
 // Watch clock changes
 func (s *service) WatchClock(req *api.WatchOptions, server api.NetworkControlService_WatchClockServer) error {
 	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeClockActuals(req.GetWatchActualChanges())
+	ach, acancel := s.Manager.SubscribeClockActuals(req.GetWatchActualChanges(), chanTimeout)
 	defer acancel()
 	for {
 		select {
@@ -322,9 +327,9 @@ func (s *service) Power(server api.NetworkControlService_PowerServer) error {
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribePowerActuals(true)
+		ach, acancel := s.Manager.SubscribePowerActuals(true, chanTimeout)
 		defer acancel()
-		rch, rcancel := s.Manager.SubscribePowerRequests(true)
+		rch, rcancel := s.Manager.SubscribePowerRequests(true, chanTimeout)
 		defer rcancel()
 		for {
 			select {
@@ -365,9 +370,9 @@ func (s *service) Locs(server api.NetworkControlService_LocsServer) error {
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribeLocActuals(true)
+		ach, acancel := s.Manager.SubscribeLocActuals(true, chanTimeout)
 		defer acancel()
-		rch, rcancel := s.Manager.SubscribeLocRequests(true)
+		rch, rcancel := s.Manager.SubscribeLocRequests(true, chanTimeout)
 		defer rcancel()
 		for {
 			select {
@@ -394,7 +399,7 @@ func (s *service) Sensors(req *api.Empty, server api.NetworkControlService_Senso
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribeSensorActuals(true, "")
+		ach, acancel := s.Manager.SubscribeSensorActuals(true, chanTimeout, "")
 		defer acancel()
 		for {
 			select {
@@ -431,9 +436,9 @@ func (s *service) Outputs(server api.NetworkControlService_OutputsServer) error 
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribeOutputActuals(true, "")
+		ach, acancel := s.Manager.SubscribeOutputActuals(true, chanTimeout, "")
 		defer acancel()
-		rch, rcancel := s.Manager.SubscribeOutputRequests(true, "")
+		rch, rcancel := s.Manager.SubscribeOutputRequests(true, chanTimeout, "")
 		defer rcancel()
 		for {
 			select {
@@ -474,9 +479,9 @@ func (s *service) Switches(server api.NetworkControlService_SwitchesServer) erro
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribeSwitchActuals(true, "")
+		ach, acancel := s.Manager.SubscribeSwitchActuals(true, chanTimeout, "")
 		defer acancel()
-		rch, rcancel := s.Manager.SubscribeSwitchRequests(true, "")
+		rch, rcancel := s.Manager.SubscribeSwitchRequests(true, chanTimeout, "")
 		defer rcancel()
 		for {
 			select {
@@ -516,7 +521,7 @@ func (s *service) Clock(server api.NetworkControlService_ClockServer) error {
 
 	// Outgoing
 	g.Go(func() error {
-		ach, acancel := s.Manager.SubscribeClockActuals(true)
+		ach, acancel := s.Manager.SubscribeClockActuals(true, chanTimeout)
 		defer acancel()
 		for {
 			select {

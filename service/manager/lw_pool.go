@@ -139,21 +139,28 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, rem
 }
 
 // SubRequests is used to subscribe to all request changes of local workers.
-func (p *localWorkerPool) SubRequests(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
 	c := make(chan api.LocalWorker)
 	if enabled {
 		// Subscribe
 		cb := func(msg api.LocalWorker) {
 			if msg.Request != nil && filter.MatchesModuleID(msg.GetId()) {
 				msg.Request.Unixtime = time.Now().Unix()
-				c <- msg
+				select {
+				case c <- msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Msg("Failed to deliver local worker request to channel")
+				}
 			}
 		}
 		p.requests.Sub(cb)
 		// Push all known request states
 		for _, lw := range p.GetAllWorkers() {
 			if lw.GetRequest() != nil && filter.MatchesModuleID(lw.GetId()) {
-				p.requests.Pub(lw)
+				cb(lw)
 			}
 		}
 		return c, func() {
@@ -168,7 +175,7 @@ func (p *localWorkerPool) SubRequests(enabled bool, filter ModuleFilter) (chan a
 }
 
 // SubActuals is used to subscribe to actual changes of local workers.
-func (p *localWorkerPool) SubActuals(enabled bool, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+func (p *localWorkerPool) SubActuals(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
 	c := make(chan api.LocalWorker)
 	if enabled {
 		cb := func(msg api.LocalWorker) {
@@ -176,14 +183,21 @@ func (p *localWorkerPool) SubActuals(enabled bool, filter ModuleFilter) (chan ap
 				if msg.Request != nil {
 					msg.Request.Unixtime = time.Now().Unix()
 				}
-				c <- msg
+				select {
+				case c <- msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Msg("Failed to deliver local worker actual to channel")
+				}
 			}
 		}
 		p.actuals.Sub(cb)
 		// Push all known actual states
 		for _, lw := range p.GetAllWorkers() {
 			if lw.GetActual() != nil && filter.MatchesModuleID(lw.GetId()) {
-				p.actuals.Pub(lw)
+				cb(lw)
 			}
 		}
 		return c, func() {

@@ -17,21 +17,25 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type outputPool struct {
 	mutex          sync.RWMutex
+	log            zerolog.Logger
 	entries        map[api.ObjectAddress]*api.Output
 	requestChanges *pubsub.PubSub
 	actualChanges  *pubsub.PubSub
 }
 
-func newOutputPool() *outputPool {
+func newOutputPool(log zerolog.Logger) *outputPool {
 	return &outputPool{
 		entries:        make(map[api.ObjectAddress]*api.Output),
+		log:            log.With().Str("pool", "output").Logger(),
 		requestChanges: pubsub.New(),
 		actualChanges:  pubsub.New(),
 	}
@@ -71,13 +75,21 @@ func (p *outputPool) SetActual(x api.Output) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *outputPool) SubRequest(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Output) {
 			if filter.Matches(msg.GetAddress()) {
-				c <- *msg
+				select {
+				case c <- *msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Str("address", string(msg.GetAddress())).
+						Msg("Failed to deliver output request to channel")
+				}
 			}
 		}
 		p.requestChanges.Sub(cb)
@@ -85,7 +97,7 @@ func (p *outputPool) SubRequest(enabled bool, filter ModuleFilter) (chan api.Out
 		p.mutex.RLock()
 		for _, output := range p.entries {
 			if output.GetRequest() != nil && filter.Matches(output.GetAddress()) {
-				p.requestChanges.Sub(output.Clone())
+				cb(output.Clone())
 			}
 		}
 		p.mutex.RUnlock()
@@ -101,13 +113,21 @@ func (p *outputPool) SubRequest(enabled bool, filter ModuleFilter) (chan api.Out
 	}
 }
 
-func (p *outputPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+func (p *outputPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
 	c := make(chan api.Output)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Output) {
 			if filter.Matches(msg.GetAddress()) {
-				c <- *msg
+				select {
+				case c <- *msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Str("address", string(msg.GetAddress())).
+						Msg("Failed to deliver output actual to channel")
+				}
 			}
 		}
 		p.actualChanges.Sub(cb)
@@ -115,7 +135,7 @@ func (p *outputPool) SubActual(enabled bool, filter ModuleFilter) (chan api.Outp
 		p.mutex.RLock()
 		for _, output := range p.entries {
 			if output.GetActual() != nil && filter.Matches(output.GetAddress()) {
-				p.actualChanges.Sub(output.Clone())
+				cb(output.Clone())
 			}
 		}
 		p.mutex.RUnlock()

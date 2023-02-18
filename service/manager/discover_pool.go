@@ -18,6 +18,7 @@ import (
 	"context"
 	"math/rand"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
@@ -34,7 +35,7 @@ type discoverPool struct {
 
 func newDiscoverPool(log zerolog.Logger) *discoverPool {
 	return &discoverPool{
-		log:       log,
+		log:       log.With().Str("pool", "discovery").Logger(),
 		requests:  pubsub.New(),
 		responses: pubsub.New(),
 	}
@@ -48,7 +49,8 @@ type discoverRequest struct {
 // Trigger a discovery and wait for the response.
 func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverResult, error) {
 	// Subscribe to results
-	resultChan, cancel := p.SubActuals(true, id)
+	timeout := getTimeout(ctx, time.Minute)
+	resultChan, cancel := p.SubActuals(true, timeout, id)
 	defer cancel()
 
 	// Trigger discover
@@ -78,12 +80,19 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 }
 
 // SubRequests is called by the LocalWorker GRPC API to wait for discover requests.
-func (p *discoverPool) SubRequests(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+func (p *discoverPool) SubRequests(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
 	c := make(chan api.DeviceDiscovery)
 	if enabled {
 		cb := func(msg api.DeviceDiscovery) {
 			if id == "" || msg.GetId() == id {
-				c <- msg
+				select {
+				case c <- msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Msg("Failed to deliver DeviceDiscovery request to channel")
+				}
 			} else {
 				p.log.Debug().Str("msg_id", msg.GetId()).Msg("Skipping message for other localworker")
 			}
@@ -101,12 +110,19 @@ func (p *discoverPool) SubRequests(enabled bool, id string) (chan api.DeviceDisc
 }
 
 // subResponse is called by Trigger.
-func (p *discoverPool) SubActuals(enabled bool, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
 	c := make(chan api.DeviceDiscovery)
 	if enabled {
 		cb := func(msg api.DeviceDiscovery) {
 			if id == "" || msg.GetId() == id {
-				c <- msg
+				select {
+				case c <- msg:
+					// Done
+				case <-time.After(timeout):
+					p.log.Error().
+						Dur("timeout", timeout).
+						Msg("Failed to deliver DeviceDiscovery actual to channel")
+				}
 			}
 		}
 		p.responses.Sub(cb)

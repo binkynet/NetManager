@@ -17,20 +17,24 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type powerPool struct {
 	mutex          sync.RWMutex
+	log            zerolog.Logger
 	power          api.Power
 	requestChanges *pubsub.PubSub
 	actualChanges  *pubsub.PubSub
 }
 
-func newPowerPool() *powerPool {
+func newPowerPool(log zerolog.Logger) *powerPool {
 	return &powerPool{
+		log: log.With().Str("pool", "power").Logger(),
 		power: api.Power{
 			Request: &api.PowerState{},
 			Actual:  &api.PowerState{},
@@ -56,17 +60,24 @@ func (p *powerPool) SetActual(x api.PowerState) {
 	p.actualChanges.Pub(p.power.Clone())
 }
 
-func (p *powerPool) SubRequest(enabled bool) (chan api.Power, context.CancelFunc) {
+func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Power) {
-			c <- *msg
+			select {
+			case c <- *msg:
+				// Done
+			case <-time.After(timeout):
+				p.log.Error().
+					Dur("timeout", timeout).
+					Msg("Failed to deliver power request to channel")
+			}
 		}
 		p.requestChanges.Sub(cb)
 		// Publish known request state
 		p.mutex.RLock()
-		p.requestChanges.Sub(p.power.Clone())
+		cb(p.power.Clone())
 		p.mutex.RUnlock()
 		// Return channel & cancel function
 		return c, func() {
@@ -80,17 +91,24 @@ func (p *powerPool) SubRequest(enabled bool) (chan api.Power, context.CancelFunc
 	}
 }
 
-func (p *powerPool) SubActual(enabled bool) (chan api.Power, context.CancelFunc) {
+func (p *powerPool) SubActual(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
 	c := make(chan api.Power)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Power) {
-			c <- *msg
+			select {
+			case c <- *msg:
+				// Done
+			case <-time.After(timeout):
+				p.log.Error().
+					Dur("timeout", timeout).
+					Msg("Failed to deliver power actual to channel")
+			}
 		}
 		p.actualChanges.Sub(cb)
 		// Publish known request state
 		p.mutex.RLock()
-		p.actualChanges.Sub(p.power.Clone())
+		cb(p.power.Clone())
 		p.mutex.RUnlock()
 		// Return channel & cancel function
 		return c, func() {

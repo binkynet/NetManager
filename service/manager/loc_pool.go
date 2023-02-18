@@ -17,21 +17,25 @@ package manager
 import (
 	"context"
 	"sync"
+	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	"github.com/rs/zerolog"
 )
 
 type locPool struct {
 	mutex          sync.RWMutex
+	log            zerolog.Logger
 	entries        map[api.ObjectAddress]*api.Loc
 	requestChanges *pubsub.PubSub
 	actualChanges  *pubsub.PubSub
 }
 
-func newLocPool() *locPool {
+func newLocPool(log zerolog.Logger) *locPool {
 	return &locPool{
 		entries:        make(map[api.ObjectAddress]*api.Loc),
+		log:            log.With().Str("pool", "loc").Logger(),
 		requestChanges: pubsub.New(),
 		actualChanges:  pubsub.New(),
 	}
@@ -66,19 +70,27 @@ func (p *locPool) SetActual(x api.Loc) {
 	p.actualChanges.Pub(e.Clone())
 }
 
-func (p *locPool) SubRequest(enabled bool) (chan api.Loc, context.CancelFunc) {
+func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
 	c := make(chan api.Loc)
 	if enabled {
 		// Subscribe to requests
 		cb := func(msg *api.Loc) {
-			c <- *msg
+			select {
+			case c <- *msg:
+				// Done
+			case <-time.After(timeout):
+				p.log.Error().
+					Dur("timeout", timeout).
+					Str("address", string(msg.GetAddress())).
+					Msg("Failed to deliver loc request to channel")
+			}
 		}
 		p.requestChanges.Sub(cb)
 		// Publish all known request states
 		p.mutex.RLock()
 		for _, loc := range p.entries {
 			if loc.GetRequest() != nil {
-				p.requestChanges.Sub(loc.Clone())
+				cb(loc.Clone())
 			}
 		}
 		p.mutex.RUnlock()
@@ -94,19 +106,27 @@ func (p *locPool) SubRequest(enabled bool) (chan api.Loc, context.CancelFunc) {
 	}
 }
 
-func (p *locPool) SubActual(enabled bool) (chan api.Loc, context.CancelFunc) {
+func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
 	c := make(chan api.Loc)
 	if enabled {
 		// Subscribe
 		cb := func(msg *api.Loc) {
-			c <- *msg
+			select {
+			case c <- *msg:
+				// Done
+			case <-time.After(timeout):
+				p.log.Error().
+					Dur("timeout", timeout).
+					Str("address", string(msg.GetAddress())).
+					Msg("Failed to deliver loc actual to channel")
+			}
 		}
 		p.actualChanges.Sub(cb)
 		// Publish all known actual states
 		p.mutex.RLock()
 		for _, loc := range p.entries {
 			if loc.GetActual() != nil {
-				p.actualChanges.Sub(loc.Clone())
+				cb(loc.Clone())
 			}
 		}
 		p.mutex.RUnlock()
