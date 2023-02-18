@@ -97,7 +97,7 @@ func (p *switchPool) SubRequest(enabled bool, timeout time.Duration, filter Modu
 		p.mutex.RLock()
 		for _, sw := range p.entries {
 			if sw.GetRequest() != nil && filter.Matches(sw.GetAddress()) {
-				cb(sw.Clone())
+				go cb(sw.Clone())
 			}
 		}
 		p.mutex.RUnlock()
@@ -135,7 +135,7 @@ func (p *switchPool) SubActual(enabled bool, timeout time.Duration, filter Modul
 		p.mutex.RLock()
 		for _, sw := range p.entries {
 			if sw.GetActual() != nil && filter.Matches(sw.GetAddress()) {
-				cb(sw.Clone())
+				go cb(sw.Clone())
 			}
 		}
 		p.mutex.RUnlock()

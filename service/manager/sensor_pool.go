@@ -75,7 +75,7 @@ func (p *sensorPool) SubActual(enabled bool, timeout time.Duration, filter Modul
 		p.mutex.RLock()
 		for _, sensor := range p.entries {
 			if sensor.GetActual() != nil && filter.Matches(sensor.GetAddress()) {
-				cb(sensor.Clone())
+				go cb(sensor.Clone())
 			}
 		}
 		p.mutex.RUnlock()

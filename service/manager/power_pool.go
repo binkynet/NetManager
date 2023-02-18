@@ -108,7 +108,7 @@ func (p *powerPool) SubActual(enabled bool, timeout time.Duration) (chan api.Pow
 		p.actualChanges.Sub(cb)
 		// Publish known request state
 		p.mutex.RLock()
-		cb(p.power.Clone())
+		go cb(p.power.Clone())
 		p.mutex.RUnlock()
 		// Return channel & cancel function
 		return c, func() {

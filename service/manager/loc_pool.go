@@ -90,7 +90,7 @@ func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc,
 		p.mutex.RLock()
 		for _, loc := range p.entries {
 			if loc.GetRequest() != nil {
-				cb(loc.Clone())
+				go cb(loc.Clone())
 			}
 		}
 		p.mutex.RUnlock()
@@ -126,7 +126,7 @@ func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, 
 		p.mutex.RLock()
 		for _, loc := range p.entries {
 			if loc.GetActual() != nil {
-				cb(loc.Clone())
+				go cb(loc.Clone())
 			}
 		}
 		p.mutex.RUnlock()

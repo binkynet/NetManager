@@ -160,7 +160,7 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 		// Push all known request states
 		for _, lw := range p.GetAllWorkers() {
 			if lw.GetRequest() != nil && filter.MatchesModuleID(lw.GetId()) {
-				cb(lw)
+				go cb(lw)
 			}
 		}
 		return c, func() {
@@ -197,7 +197,7 @@ func (p *localWorkerPool) SubActuals(enabled bool, timeout time.Duration, filter
 		// Push all known actual states
 		for _, lw := range p.GetAllWorkers() {
 			if lw.GetActual() != nil && filter.MatchesModuleID(lw.GetId()) {
-				cb(lw)
+				go cb(lw)
 			}
 		}
 		return c, func() {
