@@ -40,6 +40,7 @@ func newSensorPool(log zerolog.Logger) *sensorPool {
 }
 
 func (p *sensorPool) SetActual(x api.Sensor) {
+	sensorPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -54,6 +55,7 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 }
 
 func (p *sensorPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {
+	sensorPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Sensor)
 	if enabled {
 		// Subscribe
@@ -62,11 +64,13 @@ func (p *sensorPool) SubActual(enabled bool, timeout time.Duration, filter Modul
 				select {
 				case c <- *msg:
 					// Done
+					sensorPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Str("address", string(msg.GetAddress())).
 						Msg("Failed to deliver sensor actual to channel")
+					sensorPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				}
 			}
 		}

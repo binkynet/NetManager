@@ -42,6 +42,7 @@ func newOutputPool(log zerolog.Logger) *outputPool {
 }
 
 func (p *outputPool) SetRequest(x api.Output) {
+	outputPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -57,6 +58,7 @@ func (p *outputPool) SetRequest(x api.Output) {
 }
 
 func (p *outputPool) SetActual(x api.Output) {
+	outputPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -76,6 +78,7 @@ func (p *outputPool) SetActual(x api.Output) {
 }
 
 func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	outputPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.Output)
 	if enabled {
 		// Subscribe
@@ -84,11 +87,13 @@ func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter Modu
 				select {
 				case c <- *msg:
 					// Done
+					outputPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Str("address", string(msg.GetAddress())).
 						Msg("Failed to deliver output request to channel")
+					outputPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				}
 			}
 		}
@@ -114,6 +119,7 @@ func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter Modu
 }
 
 func (p *outputPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
+	outputPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Output)
 	if enabled {
 		// Subscribe
@@ -122,11 +128,13 @@ func (p *outputPool) SubActual(enabled bool, timeout time.Duration, filter Modul
 				select {
 				case c <- *msg:
 					// Done
+					outputPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Str("address", string(msg.GetAddress())).
 						Msg("Failed to deliver output actual to channel")
+					outputPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				}
 			}
 		}

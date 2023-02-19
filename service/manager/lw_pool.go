@@ -97,6 +97,7 @@ func (p *localWorkerPool) GetAllWorkers() []api.LocalWorker {
 
 // SetRequest sets the requested state of a local worker
 func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) error {
+	lwPoolMetrics.SetRequestTotalCounters.WithLabelValues(lw.GetId()).Inc()
 	req := lw.GetRequest()
 	if req == nil {
 		return fmt.Errorf("Request missing")
@@ -121,6 +122,7 @@ func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) er
 
 // SetActual sets the actual state of a local worker
 func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, remoteAddr string) error {
+	lwPoolMetrics.SetActualTotalCounters.WithLabelValues(lw.GetId()).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -140,6 +142,7 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, rem
 
 // SubRequests is used to subscribe to all request changes of local workers.
 func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	lwPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.LocalWorker)
 	if enabled {
 		// Subscribe
@@ -149,10 +152,12 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 				select {
 				case c <- msg:
 					// Done
+					lwPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Msg("Failed to deliver local worker request to channel")
+					lwPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(msg.GetId()).Inc()
 				}
 			}
 		}
@@ -176,6 +181,7 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 
 // SubActuals is used to subscribe to actual changes of local workers.
 func (p *localWorkerPool) SubActuals(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.LocalWorker, context.CancelFunc) {
+	lwPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.LocalWorker)
 	if enabled {
 		cb := func(msg api.LocalWorker) {
@@ -186,10 +192,12 @@ func (p *localWorkerPool) SubActuals(enabled bool, timeout time.Duration, filter
 				select {
 				case c <- msg:
 					// Done
+					lwPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Msg("Failed to deliver local worker actual to channel")
+					lwPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(msg.GetId()).Inc()
 				}
 			}
 		}

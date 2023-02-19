@@ -46,9 +46,11 @@ func (p *clockPool) SetActual(x api.Clock) {
 	p.clock.Hours = x.GetHours()
 	p.clock.Minutes = x.GetMinutes()
 	p.actualChanges.Pub(p.clock.Clone())
+	clockPoolMetrics.SetActualTotalCounters.WithLabelValues("clock").Inc()
 }
 
 func (p *clockPool) SubActual(enabled bool, timeout time.Duration) (chan api.Clock, context.CancelFunc) {
+	clockPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Clock)
 	if enabled {
 		cb := func(msg *api.Clock) {
@@ -56,10 +58,12 @@ func (p *clockPool) SubActual(enabled bool, timeout time.Duration) (chan api.Clo
 			select {
 			case c <- *msg:
 				// Done
+				clockPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues("clock").Inc()
 			case <-time.After(timeout):
 				p.log.Error().
 					Dur("timeout", timeout).
 					Msg("Failed to deliver clock actual to channel")
+				clockPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues("clock").Inc()
 			}
 		}
 		p.actualChanges.Sub(cb)

@@ -81,6 +81,7 @@ func (p *discoverPool) Trigger(ctx context.Context, id string) (*api.DiscoverRes
 
 // SubRequests is called by the LocalWorker GRPC API to wait for discover requests.
 func (p *discoverPool) SubRequests(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	discoverPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.DeviceDiscovery)
 	if enabled {
 		cb := func(msg api.DeviceDiscovery) {
@@ -88,10 +89,12 @@ func (p *discoverPool) SubRequests(enabled bool, timeout time.Duration, id strin
 				select {
 				case c <- msg:
 					// Done
+					discoverPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(id).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Msg("Failed to deliver DeviceDiscovery request to channel")
+					discoverPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(id).Inc()
 				}
 			} else {
 				p.log.Debug().Str("msg_id", msg.GetId()).Msg("Skipping message for other localworker")
@@ -111,6 +114,7 @@ func (p *discoverPool) SubRequests(enabled bool, timeout time.Duration, id strin
 
 // subResponse is called by Trigger.
 func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc) {
+	discoverPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.DeviceDiscovery)
 	if enabled {
 		cb := func(msg api.DeviceDiscovery) {
@@ -118,10 +122,12 @@ func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string
 				select {
 				case c <- msg:
 					// Done
+					discoverPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(id).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Msg("Failed to deliver DeviceDiscovery actual to channel")
+					discoverPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(id).Inc()
 				}
 			}
 		}
@@ -140,11 +146,13 @@ func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string
 // SetDiscoverRequest triggers a discovery request
 func (p *discoverPool) SetDiscoverRequest(req api.DeviceDiscovery) error {
 	p.requests.Pub(req)
+	discoverPoolMetrics.SetRequestTotalCounters.WithLabelValues(req.GetId()).Inc()
 	return nil
 }
 
 // SetDiscoverResult is called by the local worker in response to discover requests.
 func (p *discoverPool) SetDiscoverResult(req api.DeviceDiscovery) error {
 	p.responses.Pub(req)
+	discoverPoolMetrics.SetActualTotalCounters.WithLabelValues(req.GetId()).Inc()
 	return nil
 }

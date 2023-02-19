@@ -42,6 +42,7 @@ func newLocPool(log zerolog.Logger) *locPool {
 }
 
 func (p *locPool) SetRequest(x api.Loc) {
+	locPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -57,6 +58,7 @@ func (p *locPool) SetRequest(x api.Loc) {
 }
 
 func (p *locPool) SetActual(x api.Loc) {
+	locPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -71,6 +73,7 @@ func (p *locPool) SetActual(x api.Loc) {
 }
 
 func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
+	locPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.Loc)
 	if enabled {
 		// Subscribe to requests
@@ -78,11 +81,13 @@ func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc,
 			select {
 			case c <- *msg:
 				// Done
+				locPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 			case <-time.After(timeout):
 				p.log.Error().
 					Dur("timeout", timeout).
 					Str("address", string(msg.GetAddress())).
 					Msg("Failed to deliver loc request to channel")
+				locPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 			}
 		}
 		p.requestChanges.Sub(cb)
@@ -107,6 +112,7 @@ func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc,
 }
 
 func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
+	locPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Loc)
 	if enabled {
 		// Subscribe
@@ -114,11 +120,13 @@ func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, 
 			select {
 			case c <- *msg:
 				// Done
+				locPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 			case <-time.After(timeout):
 				p.log.Error().
 					Dur("timeout", timeout).
 					Str("address", string(msg.GetAddress())).
 					Msg("Failed to deliver loc actual to channel")
+				locPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 			}
 		}
 		p.actualChanges.Sub(cb)

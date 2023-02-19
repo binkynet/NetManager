@@ -54,6 +54,7 @@ func (p *switchPool) SetRequest(x api.Switch) {
 		e.Request = x.GetRequest().Clone()
 	}
 	p.requestChanges.Pub(e.Clone())
+	switchPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.Address)).Inc()
 }
 
 func (p *switchPool) SetActual(x api.Switch) {
@@ -73,9 +74,11 @@ func (p *switchPool) SetActual(x api.Switch) {
 	}
 	e.Actual = x.GetActual().Clone()
 	p.actualChanges.Pub(e.Clone())
+	switchPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.Address)).Inc()
 }
 
 func (p *switchPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	switchPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.Switch)
 	if enabled {
 		// Subscribe
@@ -84,11 +87,13 @@ func (p *switchPool) SubRequest(enabled bool, timeout time.Duration, filter Modu
 				select {
 				case c <- *msg:
 					// Done
+					switchPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Str("address", string(msg.GetAddress())).
 						Msg("Failed to deliver switch request to channel")
+					switchPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				}
 			}
 		}
@@ -114,6 +119,7 @@ func (p *switchPool) SubRequest(enabled bool, timeout time.Duration, filter Modu
 }
 
 func (p *switchPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
+	switchPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Switch)
 	if enabled {
 		// Subscribe
@@ -122,11 +128,13 @@ func (p *switchPool) SubActual(enabled bool, timeout time.Duration, filter Modul
 				select {
 				case c <- *msg:
 					// Done
+					switchPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
 						Str("address", string(msg.GetAddress())).
 						Msg("Failed to deliver switch actual to channel")
+					switchPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
 				}
 			}
 		}

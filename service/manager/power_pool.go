@@ -45,6 +45,7 @@ func newPowerPool(log zerolog.Logger) *powerPool {
 }
 
 func (p *powerPool) SetRequest(x api.PowerState) {
+	powerPoolMetrics.SetRequestTotalCounters.WithLabelValues("power").Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -53,6 +54,7 @@ func (p *powerPool) SetRequest(x api.PowerState) {
 }
 
 func (p *powerPool) SetActual(x api.PowerState) {
+	powerPoolMetrics.SetActualTotalCounters.WithLabelValues("power").Inc()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -61,6 +63,7 @@ func (p *powerPool) SetActual(x api.PowerState) {
 }
 
 func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
+	powerPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.Power)
 	if enabled {
 		// Subscribe
@@ -68,10 +71,12 @@ func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Po
 			select {
 			case c <- *msg:
 				// Done
+				powerPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues("power").Inc()
 			case <-time.After(timeout):
 				p.log.Error().
 					Dur("timeout", timeout).
 					Msg("Failed to deliver power request to channel")
+				powerPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues("power").Inc()
 			}
 		}
 		p.requestChanges.Sub(cb)
@@ -92,6 +97,7 @@ func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Po
 }
 
 func (p *powerPool) SubActual(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
+	powerPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Power)
 	if enabled {
 		// Subscribe
@@ -99,10 +105,12 @@ func (p *powerPool) SubActual(enabled bool, timeout time.Duration) (chan api.Pow
 			select {
 			case c <- *msg:
 				// Done
+				powerPoolMetrics.SubActualMessagesTotalCounters.WithLabelValues("power").Inc()
 			case <-time.After(timeout):
 				p.log.Error().
 					Dur("timeout", timeout).
 					Msg("Failed to deliver power actual to channel")
+				powerPoolMetrics.SubActualMessagesFailedTotalCounters.WithLabelValues("power").Inc()
 			}
 		}
 		p.actualChanges.Sub(cb)
