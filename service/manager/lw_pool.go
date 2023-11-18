@@ -116,7 +116,7 @@ func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) er
 	// Set hash
 	entry.LocalWorker.Request.Hash = req.Sha1()
 	// Do not change last updated at
-	p.requests.Pub(entry.LocalWorker)
+	safePub(p.log, p.requests, entry.LocalWorker)
 	return nil
 }
 
@@ -136,7 +136,7 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, rem
 	entry.remoteAddr = remoteAddr
 	entry.LocalWorker.Actual = lw.GetActual().Clone()
 	entry.lastUpdatedActualAt = time.Now()
-	p.actuals.Pub(entry.LocalWorker)
+	safePub(p.log, p.actuals, entry.LocalWorker)
 	return nil
 }
 

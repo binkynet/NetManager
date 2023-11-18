@@ -45,7 +45,7 @@ func (p *clockPool) SetActual(x api.Clock) {
 	p.clock.Period = x.GetPeriod()
 	p.clock.Hours = x.GetHours()
 	p.clock.Minutes = x.GetMinutes()
-	p.actualChanges.Pub(p.clock.Clone())
+	safePub(p.log, p.actualChanges, p.clock.Clone())
 	clockPoolMetrics.SetActualTotalCounters.WithLabelValues("clock").Inc()
 }
 

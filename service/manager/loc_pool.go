@@ -54,7 +54,7 @@ func (p *locPool) SetRequest(x api.Loc) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	p.requestChanges.Pub(e.Clone())
+	safePub(p.log, p.requestChanges, e.Clone())
 }
 
 func (p *locPool) SetActual(x api.Loc) {
@@ -69,7 +69,7 @@ func (p *locPool) SetActual(x api.Loc) {
 	} else {
 		e.Actual = x.GetActual().Clone()
 	}
-	p.actualChanges.Pub(e.Clone())
+	safePub(p.log, p.actualChanges, e.Clone())
 }
 
 func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {

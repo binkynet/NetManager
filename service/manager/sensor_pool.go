@@ -51,7 +51,7 @@ func (p *sensorPool) SetActual(x api.Sensor) {
 	} else {
 		e.Actual = x.GetActual().Clone()
 	}
-	p.actualChanges.Pub(e.Clone())
+	safePub(p.log, p.actualChanges, e.Clone())
 }
 
 func (p *sensorPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Sensor, context.CancelFunc) {

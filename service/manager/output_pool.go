@@ -54,7 +54,7 @@ func (p *outputPool) SetRequest(x api.Output) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	p.requestChanges.Pub(e.Clone())
+	safePub(p.log, p.requestChanges, e.Clone())
 }
 
 func (p *outputPool) SetActual(x api.Output) {
@@ -74,7 +74,7 @@ func (p *outputPool) SetActual(x api.Output) {
 		}
 	}
 	e.Actual = x.GetActual().Clone()
-	p.actualChanges.Pub(e.Clone())
+	safePub(p.log, p.actualChanges, e.Clone())
 }
 
 func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {

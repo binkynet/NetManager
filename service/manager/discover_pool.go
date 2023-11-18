@@ -145,14 +145,14 @@ func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string
 
 // SetDiscoverRequest triggers a discovery request
 func (p *discoverPool) SetDiscoverRequest(req api.DeviceDiscovery) error {
-	p.requests.Pub(req)
+	safePub(p.log, p.requests, req)
 	discoverPoolMetrics.SetRequestTotalCounters.WithLabelValues(req.GetId()).Inc()
 	return nil
 }
 
 // SetDiscoverResult is called by the local worker in response to discover requests.
 func (p *discoverPool) SetDiscoverResult(req api.DeviceDiscovery) error {
-	p.responses.Pub(req)
+	safePub(p.log, p.responses, req)
 	discoverPoolMetrics.SetActualTotalCounters.WithLabelValues(req.GetId()).Inc()
 	return nil
 }

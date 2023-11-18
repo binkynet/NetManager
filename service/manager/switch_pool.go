@@ -53,7 +53,7 @@ func (p *switchPool) SetRequest(x api.Switch) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	p.requestChanges.Pub(e.Clone())
+	safePub(p.log, p.requestChanges, e.Clone())
 	switchPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.Address)).Inc()
 }
 
@@ -73,7 +73,7 @@ func (p *switchPool) SetActual(x api.Switch) {
 		}
 	}
 	e.Actual = x.GetActual().Clone()
-	p.actualChanges.Pub(e.Clone())
+	safePub(p.log, p.actualChanges, e.Clone())
 	switchPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.Address)).Inc()
 }
 

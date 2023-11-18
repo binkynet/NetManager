@@ -50,7 +50,7 @@ func (p *powerPool) SetRequest(x api.PowerState) {
 	defer p.mutex.Unlock()
 
 	p.power.Request.Enabled = x.GetEnabled()
-	p.requestChanges.Pub(p.power.Clone())
+	safePub(p.log, p.requestChanges, p.power.Clone())
 }
 
 func (p *powerPool) SetActual(x api.PowerState) {
@@ -59,7 +59,7 @@ func (p *powerPool) SetActual(x api.PowerState) {
 	defer p.mutex.Unlock()
 
 	p.power.Actual.Enabled = x.GetEnabled()
-	p.actualChanges.Pub(p.power.Clone())
+	safePub(p.log, p.actualChanges, p.power.Clone())
 }
 
 func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
