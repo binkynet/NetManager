@@ -16,7 +16,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
@@ -355,37 +354,4 @@ func (s *service) WatchClock(req *api.WatchOptions, server api.NetworkControlSer
 			return nil
 		}
 	}
-}
-
-// Power is used to send power requests and receive power request & actual changes.
-func (s *service) Power(server api.NetworkControlService_PowerServer) error {
-	return fmt.Errorf("deprecated")
-}
-
-// Locs is used to control locs and get changes in loc requests & actual state back.
-// Note: Loc.actual on incoming objects is ignored.
-func (s *service) Locs(server api.NetworkControlService_LocsServer) error {
-	return fmt.Errorf("deprecated")
-}
-
-// Sensors is used to receive a stream of actual sensor states.
-func (s *service) Sensors(req *api.Empty, server api.NetworkControlService_SensorsServer) error {
-	return fmt.Errorf("deprecated")
-}
-
-// Outputs is used to control outputs and get changes in output requests & actual state back.
-// Note: Output.actual on incoming objects is ignored.
-func (s *service) Outputs(server api.NetworkControlService_OutputsServer) error {
-	return fmt.Errorf("deprecated")
-}
-
-// Switches is used to control switches and get changes in switch requests & actual state back.
-// Note: Switche.actual on incoming objects is ignored.
-func (s *service) Switches(server api.NetworkControlService_SwitchesServer) error {
-	return fmt.Errorf("deprecated")
-}
-
-// Clock is used to send clock requests and receive clock changes.
-func (s *service) Clock(server api.NetworkControlService_ClockServer) error {
-	return fmt.Errorf("deprecated")
 }
