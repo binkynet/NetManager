@@ -16,6 +16,7 @@ package manager
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"sort"
 	"sync"
@@ -27,11 +28,12 @@ import (
 )
 
 type localWorkerPool struct {
-	log      zerolog.Logger
-	mutex    sync.RWMutex
-	requests *pubsub.PubSub
-	actuals  *pubsub.PubSub
-	workers  map[string]*localWorkerEntry
+	log        zerolog.Logger
+	mutex      sync.RWMutex
+	requests   *pubsub.PubSub
+	actuals    *pubsub.PubSub
+	workers    map[string]*localWorkerEntry
+	hashPrefix string
 }
 
 type localWorkerEntry struct {
@@ -41,11 +43,14 @@ type localWorkerEntry struct {
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
+	rndData := make([]byte, 4)
+	rand.Read(rndData)
 	return &localWorkerPool{
-		log:      log,
-		requests: pubsub.New(),
-		actuals:  pubsub.New(),
-		workers:  make(map[string]*localWorkerEntry),
+		log:        log,
+		requests:   pubsub.New(),
+		actuals:    pubsub.New(),
+		workers:    make(map[string]*localWorkerEntry),
+		hashPrefix: fmt.Sprintf("%x", rndData),
 	}
 }
 
@@ -114,7 +119,7 @@ func (p *localWorkerPool) SetRequest(ctx context.Context, lw api.LocalWorker) er
 	}
 	entry.LocalWorker.Request = req.Clone()
 	// Set hash
-	entry.LocalWorker.Request.Hash = req.Sha1()
+	entry.LocalWorker.Request.Hash = p.hashPrefix + req.Sha1()
 	// Do not change last updated at
 	safePub(p.log, p.requests, entry.LocalWorker)
 	return nil
