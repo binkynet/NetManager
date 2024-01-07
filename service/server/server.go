@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net"
 	"strconv"
+	"time"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/rs/zerolog"
@@ -107,9 +108,19 @@ func (s *server) Run(ctx context.Context) error {
 			log.Debug().Msg("NetManager.server nctx canceled")
 		}
 		// Close server
-		log.Debug().Msg("Closing server...")
-		grpcSrv.GracefulStop()
-		log.Debug().Msg("Closed server, canceling context...")
+		log.Debug().Msg("Closing server gracefully...")
+		stopped := make(chan struct{})
+		go func() {
+			defer close(stopped)
+			grpcSrv.GracefulStop()
+		}()
+		select {
+		case <-stopped:
+			log.Debug().Msg("Closed server gracefully, canceling context...")
+		case <-time.After(time.Second * 3):
+			log.Warn().Msg("GRPC did not close gracefully, stopping with force...")
+			grpcSrv.Stop()
+		}
 		cancel()
 		log.Debug().Msg("Closed server, canceled context.")
 		return nil
