@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"crypto/tls"
-	"log"
 	"net"
 	"strconv"
 
@@ -13,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
 )
 
@@ -54,6 +54,8 @@ type server struct {
 
 // Run the HTTP server until the given context is cancelled.
 func (s *server) Run(ctx context.Context) error {
+	log := s.log
+
 	// Create TLS config
 	/*tlsConfig, err := s.Config.createTLSConfig()
 	if err != nil {
@@ -64,7 +66,7 @@ func (s *server) Run(ctx context.Context) error {
 	grpcAddr := net.JoinHostPort(s.Host, strconv.Itoa(s.GRPCPort))
 	grpcLis, err := net.Listen("tcp", grpcAddr)
 	if err != nil {
-		log.Fatalf("failed to listen on address %s: %v", grpcAddr, err)
+		log.Fatal().Msgf("failed to listen on address %s: %v", grpcAddr, err)
 	}
 
 	// Prepare GRPC server
@@ -81,35 +83,42 @@ func (s *server) Run(ctx context.Context) error {
 	g, nctx := errgroup.WithContext(nctx)
 	g.Go(func() error {
 		if err := grpcSrv.Serve(grpcLis); err != nil {
-			s.log.Warn().Err(err).Msg("failed to serve GRPC")
+			log.Warn().Err(err).Msg("failed to serve GRPC")
 			return err
 		}
-		return nil
+		return util.ContextCanceledOrUnexpected(nctx, nil, "NetManager.server.grpcSvr")
 	})
 	g.Go(func() error {
-		return api.RegisterServiceEntry(nctx, api.ServiceTypeNetworkControl, api.ServiceInfo{
+		err := api.RegisterServiceEntry(nctx, api.ServiceTypeNetworkControl, api.ServiceInfo{
 			ApiVersion: "v1",
 			ApiPort:    int32(s.GRPCPort),
 			Secure:     false,
 		})
+		return util.ContextCanceledOrUnexpected(nctx, err, "NetManager.server.RegisterServiceEntry")
 	})
 	g.Go(func() error {
 		// Wait for content cancellation
 		select {
 		case <-ctx.Done():
 			// Stop
+			log.Debug().Msg("NetManager.server ctx canceled")
 		case <-nctx.Done():
 			// Stop
+			log.Debug().Msg("NetManager.server nctx canceled")
 		}
 		// Close server
-		s.log.Debug().Msg("Closing server...")
+		log.Debug().Msg("Closing server...")
 		grpcSrv.GracefulStop()
+		log.Debug().Msg("Closed server, canceling context...")
 		cancel()
+		log.Debug().Msg("Closed server, canceled context.")
 		return nil
 	})
+	log.Debug().Msg("NetManager.server waiting for go routines to end...")
 	if err := g.Wait(); err != nil {
-		s.log.Debug().Err(err).Msg("Wait failed")
+		log.Debug().Err(err).Msg("Wait failed")
 		return err
 	}
+	log.Debug().Msg("NetManager.server ended.")
 	return nil
 }
