@@ -167,6 +167,15 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 	lwPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.LocalWorker)
 	if enabled {
+		// Helper to reset reset flag
+		undoReset := func(id string) {
+			p.mutex.Lock()
+			defer p.mutex.Unlock()
+			if worker, found := p.workers[id]; found {
+				worker.resetRequested = false
+			}
+		}
+
 		// Subscribe
 		cb := func(msg api.LocalWorker) {
 			if msg.Request != nil && filter.MatchesModuleID(msg.GetId()) {
@@ -175,6 +184,10 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 				case c <- msg:
 					// Done
 					lwPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
+					// Reset reset flag if needed
+					if msg.GetRequest().GetReset_() {
+						go undoReset(msg.GetId())
+					}
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).
