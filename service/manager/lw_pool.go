@@ -40,6 +40,7 @@ type localWorkerEntry struct {
 	remoteAddr string
 	api.LocalWorker
 	lastUpdatedActualAt time.Time
+	resetRequested      bool
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
@@ -66,6 +67,22 @@ func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, string, time.
 		}
 	}
 	return api.LocalWorkerInfo{}, "", time.Time{}, false
+}
+
+// RequestReset requests the local worker with given ID to reset itself.
+func (p *localWorkerPool) RequestReset(ctx context.Context, id string) {
+	isRequested := func() (bool, api.LocalWorker) {
+		p.mutex.Lock()
+		defer p.mutex.Unlock()
+		if worker, found := p.workers[id]; found {
+			worker.resetRequested = true
+			return true, worker.LocalWorker
+		}
+		return false, api.LocalWorker{}
+	}
+	if isReq, lw := isRequested(); isReq {
+		p.SetRequest(ctx, lw)
+	}
 }
 
 // GetAll fetches the last known info for all local workers.

@@ -41,6 +41,8 @@ type Manager interface {
 	SetLocalWorkerRequest(ctx context.Context, info api.LocalWorker) error
 	// SetLocalWorkerActual sets the actual state of a local worker
 	SetLocalWorkerActual(ctx context.Context, info api.LocalWorker, remoteAddr string) error
+	// RequestResetLocalWorker requests the local worker with given ID to reset itself.
+	RequestResetLocalWorker(ctx context.Context, id string)
 
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
@@ -190,6 +192,11 @@ func (m *manager) SetLocalWorkerRequest(ctx context.Context, lw api.LocalWorker)
 // SetLocalWorkerActual sets the actual state of a local worker
 func (m *manager) SetLocalWorkerActual(ctx context.Context, lw api.LocalWorker, remoteAddr string) error {
 	return m.localWorkerPool.SetActual(ctx, lw, remoteAddr)
+}
+
+// RequestResetLocalWorker requests the local worker with given ID to reset itself.
+func (m *manager) RequestResetLocalWorker(ctx context.Context, id string) {
+	m.localWorkerPool.RequestReset(ctx, id)
 }
 
 // Trigger a discovery and wait for the response.
