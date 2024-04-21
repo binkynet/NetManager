@@ -41,6 +41,7 @@ type localWorkerEntry struct {
 	remoteAddr string
 	api.LocalWorker
 	lastUpdatedActualAt time.Time
+	client              api.LocalWorkerServiceClient
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
@@ -72,10 +73,13 @@ func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, string, time.
 // GetLocalWorkerServiceClient constructs a client to the LocalWorkerService served
 // on the local worker with given ID.
 func (p *localWorkerPool) GetLocalWorkerServiceClient(id string) (api.LocalWorkerServiceClient, error) {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
 
 	if lw, found := p.workers[id]; found {
+		if lw.client != nil {
+			return lw.client, nil
+		}
 		port := 0
 		secure := false
 		if info := lw.GetActual(); info != nil {
@@ -89,7 +93,8 @@ func (p *localWorkerPool) GetLocalWorkerServiceClient(id string) (api.LocalWorke
 		if err != nil {
 			return nil, fmt.Errorf("failed to dial local worker: %w", err)
 		}
-		return api.NewLocalWorkerServiceClient(conn), nil
+		lw.client = api.NewLocalWorkerServiceClient(conn)
+		return lw.client, nil
 	}
 	return nil, fmt.Errorf("local worker [%s] not found", id)
 }
@@ -176,9 +181,15 @@ func (p *localWorkerPool) SetActual(ctx context.Context, lw api.LocalWorker, rem
 		entry.LocalWorker.Id = id
 		p.workers[id] = entry
 	}
+	changed := entry.remoteAddr != remoteAddr ||
+		entry.LocalWorker.GetActual().GetLocalWorkerServicePort() != lw.GetActual().GetLocalWorkerServicePort() ||
+		entry.LocalWorker.GetActual().GetLocalWorkerServiceSecure() != lw.GetActual().GetLocalWorkerServiceSecure()
 	entry.remoteAddr = remoteAddr
 	entry.LocalWorker.Actual = lw.GetActual().Clone()
 	entry.lastUpdatedActualAt = time.Now()
+	if changed {
+		entry.client = nil
+	}
 	safePub(p.log, p.actuals, entry.LocalWorker)
 	return nil
 }
