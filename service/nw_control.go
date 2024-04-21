@@ -82,15 +82,6 @@ func (s *service) WatchLocalWorkers(req *api.WatchOptions, server api.NetworkCon
 	}
 }
 
-// Set a requested device discovery state
-func (s *service) SetDeviceDiscoveryRequest(ctx context.Context, req *api.DeviceDiscovery) (*api.Empty, error) {
-	discoverMetrics.SetRequestTotalCounters.WithLabelValues(req.GetId()).Inc()
-	if err := s.Manager.SetDevicesDiscoveryRequest(ctx, *req); err != nil {
-		return nil, err
-	}
-	return &api.Empty{}, nil
-}
-
 // Set an actual device discovery state
 func (s *service) SetDeviceDiscoveryActual(ctx context.Context, req *api.DeviceDiscovery) (*api.Empty, error) {
 	discoverMetrics.SetActualTotalCounters.WithLabelValues(req.GetId()).Inc()
@@ -100,83 +91,9 @@ func (s *service) SetDeviceDiscoveryActual(ctx context.Context, req *api.DeviceD
 	return &api.Empty{}, nil
 }
 
-// Watch device discovery changes
-func (s *service) WatchDeviceDiscoveries(req *api.WatchOptions, server api.NetworkControlService_WatchDeviceDiscoveriesServer) error {
-	discoverMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeDiscoverRequests(req.GetWatchActualChanges(), chanTimeout, req.GetModuleId())
-	defer acancel()
-	rch, rcancel := s.Manager.SubscribeDiscoverActuals(req.GetWatchRequestChanges(), chanTimeout, req.GetModuleId())
-	defer rcancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send device discovery actual failed")
-				discoverMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues(msg.GetId()).Inc()
-				return err
-			}
-			discoverMetrics.WatchActualMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
-		case msg := <-rch:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send device discovery request failed")
-				discoverMetrics.WatchRequestMessagesFailedTotalCounters.WithLabelValues(msg.GetId()).Inc()
-				return err
-			}
-			discoverMetrics.WatchRequestMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
-
-}
-
-func (s *service) SetPowerRequest(ctx context.Context, req *api.PowerState) (*api.Empty, error) {
-	powerMetrics.SetRequestTotalCounters.WithLabelValues("power").Inc()
-	s.Manager.SetPowerRequest(*req)
-	return &api.Empty{}, nil
-}
-
 func (s *service) SetPowerActual(ctx context.Context, req *api.PowerState) (*api.Empty, error) {
 	powerMetrics.SetActualTotalCounters.WithLabelValues("power").Inc()
 	s.Manager.SetPowerActual(*req)
-	return &api.Empty{}, nil
-}
-
-func (s *service) WatchPower(req *api.WatchOptions, server api.NetworkControlService_WatchPowerServer) error {
-	powerMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribePowerActuals(req.GetWatchActualChanges(), chanTimeout)
-	defer acancel()
-	rch, rcancel := s.Manager.SubscribePowerRequests(req.GetWatchRequestChanges(), chanTimeout)
-	defer rcancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send power actual failed")
-				powerMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues("power").Inc()
-				return err
-			}
-			powerMetrics.WatchActualMessagesTotalCounters.WithLabelValues("power").Inc()
-		case msg := <-rch:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send power request failed")
-				powerMetrics.WatchRequestMessagesFailedTotalCounters.WithLabelValues("power").Inc()
-				return err
-			}
-			powerMetrics.WatchRequestMessagesTotalCounters.WithLabelValues("power").Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
-}
-
-func (s *service) SetLocRequest(ctx context.Context, req *api.Loc) (*api.Empty, error) {
-	locMetrics.SetRequestTotalCounters.WithLabelValues(string(req.GetAddress())).Inc()
-	s.Manager.SetLocRequest(*req)
 	return &api.Empty{}, nil
 }
 
@@ -186,66 +103,9 @@ func (s *service) SetLocActual(ctx context.Context, req *api.Loc) (*api.Empty, e
 	return &api.Empty{}, nil
 }
 
-func (s *service) WatchLocs(req *api.WatchOptions, server api.NetworkControlService_WatchLocsServer) error {
-	locMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeLocActuals(req.GetWatchActualChanges(), chanTimeout)
-	defer acancel()
-	rch, rcancel := s.Manager.SubscribeLocRequests(req.GetWatchRequestChanges(), chanTimeout)
-	defer rcancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send loc actual failed")
-				locMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			locMetrics.WatchActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case msg := <-rch:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send loc request failed")
-				locMetrics.WatchRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			locMetrics.WatchRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
-}
-
 func (s *service) SetSensorActual(ctx context.Context, req *api.Sensor) (*api.Empty, error) {
 	sensorMetrics.SetActualTotalCounters.WithLabelValues(string(req.GetAddress())).Inc()
 	s.Manager.SetSensorActual(*req)
-	return &api.Empty{}, nil
-}
-
-func (s *service) WatchSensors(req *api.WatchOptions, server api.NetworkControlService_WatchSensorsServer) error {
-	sensorMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeSensorActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
-	defer acancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send sensor actual failed")
-				sensorMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			sensorMetrics.WatchActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
-}
-
-func (s *service) SetOutputRequest(ctx context.Context, req *api.Output) (*api.Empty, error) {
-	outputMetrics.SetRequestTotalCounters.WithLabelValues(string(req.GetAddress())).Inc()
-	s.Manager.SetOutputRequest(*req)
 	return &api.Empty{}, nil
 }
 
@@ -255,76 +115,10 @@ func (s *service) SetOutputActual(ctx context.Context, req *api.Output) (*api.Em
 	return &api.Empty{}, nil
 }
 
-func (s *service) WatchOutputs(req *api.WatchOptions, server api.NetworkControlService_WatchOutputsServer) error {
-	outputMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeOutputActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
-	defer acancel()
-	rch, rcancel := s.Manager.SubscribeOutputRequests(req.GetWatchRequestChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
-	defer rcancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send output actual failed")
-				outputMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			outputMetrics.WatchActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case msg := <-rch:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send output request failed")
-				outputMetrics.WatchRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			outputMetrics.WatchRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
-}
-
-func (s *service) SetSwitchRequest(ctx context.Context, req *api.Switch) (*api.Empty, error) {
-	switchMetrics.SetRequestTotalCounters.WithLabelValues(string(req.GetAddress())).Inc()
-	s.Manager.SetSwitchRequest(*req)
-	return &api.Empty{}, nil
-}
-
 func (s *service) SetSwitchActual(ctx context.Context, req *api.Switch) (*api.Empty, error) {
 	switchMetrics.SetActualTotalCounters.WithLabelValues(string(req.GetAddress())).Inc()
 	s.Manager.SetSwitchActual(*req)
 	return &api.Empty{}, nil
-}
-
-func (s *service) WatchSwitches(req *api.WatchOptions, server api.NetworkControlService_WatchSwitchesServer) error {
-	switchMetrics.WatchTotalCounter.Inc()
-	ctx := server.Context()
-	ach, acancel := s.Manager.SubscribeSwitchActuals(req.GetWatchActualChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
-	defer acancel()
-	rch, rcancel := s.Manager.SubscribeSwitchRequests(req.GetWatchRequestChanges(), chanTimeout, manager.ModuleFilter(req.GetModuleId()))
-	defer rcancel()
-	for {
-		select {
-		case msg := <-ach:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send switch actual failed")
-				switchMetrics.WatchActualMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			switchMetrics.WatchActualMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case msg := <-rch:
-			if err := server.Send(&msg); err != nil {
-				s.Log.Warn().Err(err).Msg("Send request actual failed")
-				switchMetrics.WatchRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				return err
-			}
-			switchMetrics.WatchRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-		case <-ctx.Done():
-			// Context canceled
-			return nil
-		}
-	}
 }
 
 // Set an actual clock state

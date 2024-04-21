@@ -25,19 +25,19 @@ import (
 )
 
 type switchPool struct {
-	mutex          sync.RWMutex
-	log            zerolog.Logger
-	entries        map[api.ObjectAddress]*api.Switch
-	requestChanges *pubsub.PubSub
-	actualChanges  *pubsub.PubSub
+	mutex   sync.RWMutex
+	log     zerolog.Logger
+	entries map[api.ObjectAddress]*api.Switch
+	//requestChanges *pubsub.PubSub
+	actualChanges *pubsub.PubSub
 }
 
 func newSwitchPool(log zerolog.Logger) *switchPool {
 	return &switchPool{
-		entries:        make(map[api.ObjectAddress]*api.Switch),
-		log:            log.With().Str("pool", "switch").Logger(),
-		requestChanges: pubsub.New(),
-		actualChanges:  pubsub.New(),
+		entries: make(map[api.ObjectAddress]*api.Switch),
+		log:     log.With().Str("pool", "switch").Logger(),
+		//requestChanges: pubsub.New(),
+		actualChanges: pubsub.New(),
 	}
 }
 
@@ -53,7 +53,6 @@ func (p *switchPool) SetRequest(x api.Switch) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	safePub(p.log, p.requestChanges, e.Clone())
 	switchPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.Address)).Inc()
 }
 
@@ -75,47 +74,6 @@ func (p *switchPool) SetActual(x api.Switch) {
 	e.Actual = x.GetActual().Clone()
 	safePub(p.log, p.actualChanges, e.Clone())
 	switchPoolMetrics.SetActualTotalCounters.WithLabelValues(string(x.Address)).Inc()
-}
-
-func (p *switchPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
-	switchPoolMetrics.SubRequestTotalCounter.Inc()
-	c := make(chan api.Switch)
-	if enabled {
-		// Subscribe
-		cb := func(msg *api.Switch) {
-			if filter.Matches(msg.GetAddress()) {
-				select {
-				case c <- *msg:
-					// Done
-					switchPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				case <-time.After(timeout):
-					p.log.Error().
-						Dur("timeout", timeout).
-						Str("address", string(msg.GetAddress())).
-						Msg("Failed to deliver switch request to channel")
-					switchPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				}
-			}
-		}
-		p.requestChanges.Sub(cb)
-		// Publish all known request states
-		p.mutex.RLock()
-		for _, sw := range p.entries {
-			if sw.GetRequest() != nil && filter.Matches(sw.GetAddress()) {
-				go cb(sw.Clone())
-			}
-		}
-		p.mutex.RUnlock()
-		// Return channel & cancel function
-		return c, func() {
-			p.requestChanges.Leave(cb)
-			close(c)
-		}
-	} else {
-		return c, func() {
-			close(c)
-		}
-	}
 }
 
 func (p *switchPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {

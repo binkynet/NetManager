@@ -47,11 +47,9 @@ type Manager interface {
 	// Trigger a discovery and wait for the response.
 	Discover(ctx context.Context, id string) (*api.DiscoverResult, error)
 	// Trigger a discovery.
-	SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error
+	SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery)
 	// SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
 	SetDevicesDiscoveryActual(ctx context.Context, req api.DeviceDiscovery) error
-	// Subscribe to discovery requests
-	SubscribeDiscoverRequests(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc)
 	// Subscribe to discovery actuals
 	SubscribeDiscoverActuals(enabled bool, timeout time.Duration, id string) (chan api.DeviceDiscovery, context.CancelFunc)
 
@@ -59,8 +57,6 @@ type Manager interface {
 	SetPowerRequest(x api.PowerState)
 	// Set the actual power state
 	SetPowerActual(x api.PowerState)
-	// Subscribe to power requests
-	SubscribePowerRequests(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc)
 	// Subscribe to power actuals
 	SubscribePowerActuals(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc)
 
@@ -68,8 +64,6 @@ type Manager interface {
 	SetLocRequest(x api.Loc)
 	// Set the actual loc state
 	SetLocActual(x api.Loc)
-	// Subscribe to loc requests
-	SubscribeLocRequests(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc)
 	// Subscribe to loc actuals
 	SubscribeLocActuals(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc)
 
@@ -77,8 +71,6 @@ type Manager interface {
 	SetOutputRequest(x api.Output)
 	// Set the actual output state
 	SetOutputActual(x api.Output)
-	// Subscribe to output requests
-	SubscribeOutputRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 	// Subscribe to output actuals
 	SubscribeOutputActuals(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc)
 
@@ -91,8 +83,6 @@ type Manager interface {
 	SetSwitchRequest(x api.Switch)
 	// Set the actual switch state
 	SetSwitchActual(x api.Switch)
-	// Subscribe to switch requests
-	SubscribeSwitchRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 	// Subscribe to switch actuals
 	SubscribeSwitchActuals(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc)
 
@@ -206,8 +196,26 @@ func (m *manager) Discover(ctx context.Context, id string) (*api.DiscoverResult,
 }
 
 // Trigger a discovery.
-func (m *manager) SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) error {
-	return m.discoverPool.SetDiscoverRequest(req)
+func (m *manager) SetDevicesDiscoveryRequest(ctx context.Context, req api.DeviceDiscovery) {
+	m.discoverPool.SetDiscoverRequest(req)
+	log := m.Log
+	go func() {
+		lwInfo, _, _, _ := m.localWorkerPool.GetInfo(req.GetId())
+		if lwInfo.GetSupportsSetDeviceDiscoveryRequest() {
+			if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
+				log.Error().Err(err).
+					Str("id", lwInfo.GetId()).
+					Msg("Failed to get local worker client")
+			} else {
+				if _, err := client.SetDeviceDiscoveryRequest(context.Background(), &req); err != nil {
+					log.Error().Err(err).
+						Str("id", lwInfo.GetId()).
+						Msg("Failed to send device discovery request to local worker")
+				}
+			}
+		}
+	}()
+
 }
 
 // SetDevicesDiscoveryActual is called by the local worker in response to discover requests.
@@ -229,31 +237,28 @@ func (m *manager) SubscribeDiscoverActuals(enabled bool, timeout time.Duration, 
 func (m *manager) SetPowerRequest(x api.PowerState) {
 	m.powerPool.SetRequest(x)
 	log := m.Log
-	for _, lwInfo := range m.localWorkerPool.GetAll() {
-		if lwInfo.GetSupportsSetPowerRequest() {
-			if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
-				log.Error().Err(err).
-					Str("id", lwInfo.GetId()).
-					Msg("Failed to get local worker client")
-			} else {
-				if _, err := client.SetPowerRequest(context.Background(), &x); err != nil {
+	go func() {
+		for _, lwInfo := range m.localWorkerPool.GetAll() {
+			if lwInfo.GetSupportsSetPowerRequest() {
+				if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
 					log.Error().Err(err).
 						Str("id", lwInfo.GetId()).
-						Msg("Failed to send power request to local worker")
+						Msg("Failed to get local worker client")
+				} else {
+					if _, err := client.SetPowerRequest(context.Background(), &x); err != nil {
+						log.Error().Err(err).
+							Str("id", lwInfo.GetId()).
+							Msg("Failed to send power request to local worker")
+					}
 				}
 			}
 		}
-	}
+	}()
 }
 
 // Set the actual power state
 func (m *manager) SetPowerActual(x api.PowerState) {
 	m.powerPool.SetActual(x)
-}
-
-// Subscribe to power requests
-func (m *manager) SubscribePowerRequests(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
-	return m.powerPool.SubRequest(enabled, timeout)
 }
 
 // Subscribe to power actuals
@@ -264,16 +269,29 @@ func (m *manager) SubscribePowerActuals(enabled bool, timeout time.Duration) (ch
 // Set the requested loc state
 func (m *manager) SetLocRequest(x api.Loc) {
 	m.locPool.SetRequest(x)
+	log := m.Log
+	go func() {
+		for _, lwInfo := range m.localWorkerPool.GetAll() {
+			if lwInfo.GetSupportsSetLocRequest() {
+				if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
+					log.Error().Err(err).
+						Str("id", lwInfo.GetId()).
+						Msg("Failed to get local worker client")
+				} else {
+					if _, err := client.SetLocRequest(context.Background(), &x); err != nil {
+						log.Error().Err(err).
+							Str("id", lwInfo.GetId()).
+							Msg("Failed to send loc request to local worker")
+					}
+				}
+			}
+		}
+	}()
 }
 
 // Set the actual loc state
 func (m *manager) SetLocActual(x api.Loc) {
 	m.locPool.SetActual(x)
-}
-
-// Subscribe to loc requests
-func (m *manager) SubscribeLocRequests(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
-	return m.locPool.SubRequest(enabled, timeout)
 }
 
 // Subscribe to loc actuals
@@ -285,10 +303,27 @@ func (m *manager) SubscribeLocActuals(enabled bool, timeout time.Duration) (chan
 func (m *manager) SetOutputRequest(x api.Output) {
 	m.outputPool.SetRequest(x)
 	log := m.Log
-	moduleID, _, _ := api.SplitAddress(x.Address)
-	if moduleID == api.GlobalModuleID {
-		// Send to all
-		for _, lwInfo := range m.localWorkerPool.GetAll() {
+	go func() {
+		moduleID, _, _ := api.SplitAddress(x.Address)
+		if moduleID == api.GlobalModuleID {
+			// Send to all
+			for _, lwInfo := range m.localWorkerPool.GetAll() {
+				if lwInfo.GetSupportsSetOutputRequest() {
+					if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
+						log.Error().Err(err).
+							Str("id", lwInfo.GetId()).
+							Msg("Failed to get local worker client")
+					} else {
+						if _, err := client.SetOutputRequest(context.Background(), &x); err != nil {
+							log.Error().Err(err).
+								Str("id", lwInfo.GetId()).
+								Msg("Failed to send output request to local worker")
+						}
+					}
+				}
+			}
+		} else {
+			lwInfo, _, _, _ := m.localWorkerPool.GetInfo(moduleID)
 			if lwInfo.GetSupportsSetOutputRequest() {
 				if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
 					log.Error().Err(err).
@@ -303,32 +338,12 @@ func (m *manager) SetOutputRequest(x api.Output) {
 				}
 			}
 		}
-	} else {
-		lwInfo, _, _, _ := m.localWorkerPool.GetInfo(moduleID)
-		if lwInfo.GetSupportsSetOutputRequest() {
-			if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
-				log.Error().Err(err).
-					Str("id", lwInfo.GetId()).
-					Msg("Failed to get local worker client")
-			} else {
-				if _, err := client.SetOutputRequest(context.Background(), &x); err != nil {
-					log.Error().Err(err).
-						Str("id", lwInfo.GetId()).
-						Msg("Failed to send output request to local worker")
-				}
-			}
-		}
-	}
+	}()
 }
 
 // Set the actual output state
 func (m *manager) SetOutputActual(x api.Output) {
 	m.outputPool.SetActual(x)
-}
-
-// Subscribe to output requests
-func (m *manager) SubscribeOutputRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
-	return m.outputPool.SubRequest(enabled, timeout, filter)
 }
 
 // Subscribe to output actuals
@@ -350,10 +365,27 @@ func (m *manager) SubscribeSensorActuals(enabled bool, timeout time.Duration, fi
 func (m *manager) SetSwitchRequest(x api.Switch) {
 	m.switchPool.SetRequest(x)
 	log := m.Log
-	moduleID, _, _ := api.SplitAddress(x.Address)
-	if moduleID == api.GlobalModuleID {
-		// Send to all
-		for _, lwInfo := range m.localWorkerPool.GetAll() {
+	go func() {
+		moduleID, _, _ := api.SplitAddress(x.Address)
+		if moduleID == api.GlobalModuleID {
+			// Send to all
+			for _, lwInfo := range m.localWorkerPool.GetAll() {
+				if lwInfo.GetSupportsSetSwitchRequest() {
+					if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
+						log.Error().Err(err).
+							Str("id", lwInfo.GetId()).
+							Msg("Failed to get local worker client")
+					} else {
+						if _, err := client.SetSwitchRequest(context.Background(), &x); err != nil {
+							log.Error().Err(err).
+								Str("id", lwInfo.GetId()).
+								Msg("Failed to send switch request to local worker")
+						}
+					}
+				}
+			}
+		} else {
+			lwInfo, _, _, _ := m.localWorkerPool.GetInfo(moduleID)
 			if lwInfo.GetSupportsSetSwitchRequest() {
 				if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
 					log.Error().Err(err).
@@ -368,32 +400,12 @@ func (m *manager) SetSwitchRequest(x api.Switch) {
 				}
 			}
 		}
-	} else {
-		lwInfo, _, _, _ := m.localWorkerPool.GetInfo(moduleID)
-		if lwInfo.GetSupportsSetSwitchRequest() {
-			if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
-				log.Error().Err(err).
-					Str("id", lwInfo.GetId()).
-					Msg("Failed to get local worker client")
-			} else {
-				if _, err := client.SetSwitchRequest(context.Background(), &x); err != nil {
-					log.Error().Err(err).
-						Str("id", lwInfo.GetId()).
-						Msg("Failed to send switch request to local worker")
-				}
-			}
-		}
-	}
+	}()
 }
 
 // Set the actual switch state
 func (m *manager) SetSwitchActual(x api.Switch) {
 	m.switchPool.SetActual(x)
-}
-
-// Subscribe to switch requests
-func (m *manager) SubscribeSwitchRequests(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Switch, context.CancelFunc) {
-	return m.switchPool.SubRequest(enabled, timeout, filter)
 }
 
 // Subscribe to switch actuals

@@ -25,19 +25,17 @@ import (
 )
 
 type outputPool struct {
-	mutex          sync.RWMutex
-	log            zerolog.Logger
-	entries        map[api.ObjectAddress]*api.Output
-	requestChanges *pubsub.PubSub
-	actualChanges  *pubsub.PubSub
+	mutex         sync.RWMutex
+	log           zerolog.Logger
+	entries       map[api.ObjectAddress]*api.Output
+	actualChanges *pubsub.PubSub
 }
 
 func newOutputPool(log zerolog.Logger) *outputPool {
 	return &outputPool{
-		entries:        make(map[api.ObjectAddress]*api.Output),
-		log:            log.With().Str("pool", "output").Logger(),
-		requestChanges: pubsub.New(),
-		actualChanges:  pubsub.New(),
+		entries:       make(map[api.ObjectAddress]*api.Output),
+		log:           log.With().Str("pool", "output").Logger(),
+		actualChanges: pubsub.New(),
 	}
 }
 
@@ -54,7 +52,6 @@ func (p *outputPool) SetRequest(x api.Output) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	safePub(p.log, p.requestChanges, e.Clone())
 }
 
 func (p *outputPool) SetActual(x api.Output) {
@@ -75,47 +72,6 @@ func (p *outputPool) SetActual(x api.Output) {
 	}
 	e.Actual = x.GetActual().Clone()
 	safePub(p.log, p.actualChanges, e.Clone())
-}
-
-func (p *outputPool) SubRequest(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {
-	outputPoolMetrics.SubRequestTotalCounter.Inc()
-	c := make(chan api.Output)
-	if enabled {
-		// Subscribe
-		cb := func(msg *api.Output) {
-			if filter.Matches(msg.GetAddress()) {
-				select {
-				case c <- *msg:
-					// Done
-					outputPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				case <-time.After(timeout):
-					p.log.Error().
-						Dur("timeout", timeout).
-						Str("address", string(msg.GetAddress())).
-						Msg("Failed to deliver output request to channel")
-					outputPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-				}
-			}
-		}
-		p.requestChanges.Sub(cb)
-		// Publish all known request states
-		p.mutex.RLock()
-		for _, output := range p.entries {
-			if output.GetRequest() != nil && filter.Matches(output.GetAddress()) {
-				go cb(output.Clone())
-			}
-		}
-		p.mutex.RUnlock()
-		// Return channel & cancel function
-		return c, func() {
-			p.requestChanges.Leave(cb)
-			close(c)
-		}
-	} else {
-		return c, func() {
-			close(c)
-		}
-	}
 }
 
 func (p *outputPool) SubActual(enabled bool, timeout time.Duration, filter ModuleFilter) (chan api.Output, context.CancelFunc) {

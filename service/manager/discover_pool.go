@@ -144,10 +144,9 @@ func (p *discoverPool) SubActuals(enabled bool, timeout time.Duration, id string
 }
 
 // SetDiscoverRequest triggers a discovery request
-func (p *discoverPool) SetDiscoverRequest(req api.DeviceDiscovery) error {
+func (p *discoverPool) SetDiscoverRequest(req api.DeviceDiscovery) {
 	safePub(p.log, p.requests, req)
 	discoverPoolMetrics.SetRequestTotalCounters.WithLabelValues(req.GetId()).Inc()
-	return nil
 }
 
 // SetDiscoverResult is called by the local worker in response to discover requests.

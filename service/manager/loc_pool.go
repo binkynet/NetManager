@@ -25,19 +25,17 @@ import (
 )
 
 type locPool struct {
-	mutex          sync.RWMutex
-	log            zerolog.Logger
-	entries        map[api.ObjectAddress]*api.Loc
-	requestChanges *pubsub.PubSub
-	actualChanges  *pubsub.PubSub
+	mutex         sync.RWMutex
+	log           zerolog.Logger
+	entries       map[api.ObjectAddress]*api.Loc
+	actualChanges *pubsub.PubSub
 }
 
 func newLocPool(log zerolog.Logger) *locPool {
 	return &locPool{
-		entries:        make(map[api.ObjectAddress]*api.Loc),
-		log:            log.With().Str("pool", "loc").Logger(),
-		requestChanges: pubsub.New(),
-		actualChanges:  pubsub.New(),
+		entries:       make(map[api.ObjectAddress]*api.Loc),
+		log:           log.With().Str("pool", "loc").Logger(),
+		actualChanges: pubsub.New(),
 	}
 }
 
@@ -54,7 +52,6 @@ func (p *locPool) SetRequest(x api.Loc) {
 	} else {
 		e.Request = x.GetRequest().Clone()
 	}
-	safePub(p.log, p.requestChanges, e.Clone())
 }
 
 func (p *locPool) SetActual(x api.Loc) {
@@ -70,45 +67,6 @@ func (p *locPool) SetActual(x api.Loc) {
 		e.Actual = x.GetActual().Clone()
 	}
 	safePub(p.log, p.actualChanges, e.Clone())
-}
-
-func (p *locPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {
-	locPoolMetrics.SubRequestTotalCounter.Inc()
-	c := make(chan api.Loc)
-	if enabled {
-		// Subscribe to requests
-		cb := func(msg *api.Loc) {
-			select {
-			case c <- *msg:
-				// Done
-				locPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-			case <-time.After(timeout):
-				p.log.Error().
-					Dur("timeout", timeout).
-					Str("address", string(msg.GetAddress())).
-					Msg("Failed to deliver loc request to channel")
-				locPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues(string(msg.GetAddress())).Inc()
-			}
-		}
-		p.requestChanges.Sub(cb)
-		// Publish all known request states
-		p.mutex.RLock()
-		for _, loc := range p.entries {
-			if loc.GetRequest() != nil {
-				go cb(loc.Clone())
-			}
-		}
-		p.mutex.RUnlock()
-		// Return channel & cancel function
-		return c, func() {
-			p.requestChanges.Leave(cb)
-			close(c)
-		}
-	} else {
-		return c, func() {
-			close(c)
-		}
-	}
 }
 
 func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, context.CancelFunc) {

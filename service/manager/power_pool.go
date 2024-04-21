@@ -62,40 +62,6 @@ func (p *powerPool) SetActual(x api.PowerState) {
 	safePub(p.log, p.actualChanges, p.power.Clone())
 }
 
-func (p *powerPool) SubRequest(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
-	powerPoolMetrics.SubRequestTotalCounter.Inc()
-	c := make(chan api.Power)
-	if enabled {
-		// Subscribe
-		cb := func(msg *api.Power) {
-			select {
-			case c <- *msg:
-				// Done
-				powerPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues("power").Inc()
-			case <-time.After(timeout):
-				p.log.Error().
-					Dur("timeout", timeout).
-					Msg("Failed to deliver power request to channel")
-				powerPoolMetrics.SubRequestMessagesFailedTotalCounters.WithLabelValues("power").Inc()
-			}
-		}
-		p.requestChanges.Sub(cb)
-		// Publish known request state
-		p.mutex.RLock()
-		cb(p.power.Clone())
-		p.mutex.RUnlock()
-		// Return channel & cancel function
-		return c, func() {
-			p.requestChanges.Leave(cb)
-			close(c)
-		}
-	} else {
-		return c, func() {
-			close(c)
-		}
-	}
-}
-
 func (p *powerPool) SubActual(enabled bool, timeout time.Duration) (chan api.Power, context.CancelFunc) {
 	powerPoolMetrics.SubActualTotalCounter.Inc()
 	c := make(chan api.Power)
