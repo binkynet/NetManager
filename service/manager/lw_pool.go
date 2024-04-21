@@ -23,6 +23,7 @@ import (
 	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
+	"github.com/binkynet/NetManager/service/util"
 	"github.com/mattn/go-pubsub"
 	"github.com/rs/zerolog"
 )
@@ -40,7 +41,6 @@ type localWorkerEntry struct {
 	remoteAddr string
 	api.LocalWorker
 	lastUpdatedActualAt time.Time
-	resetRequested      bool
 }
 
 func newLocalWorkerPool(log zerolog.Logger) *localWorkerPool {
@@ -69,20 +69,41 @@ func (p *localWorkerPool) GetInfo(id string) (api.LocalWorkerInfo, string, time.
 	return api.LocalWorkerInfo{}, "", time.Time{}, false
 }
 
-// RequestReset requests the local worker with given ID to reset itself.
-func (p *localWorkerPool) RequestReset(ctx context.Context, id string) {
-	isRequested := func() (bool, api.LocalWorker) {
-		p.mutex.Lock()
-		defer p.mutex.Unlock()
-		if worker, found := p.workers[id]; found {
-			worker.resetRequested = true
-			return true, worker.LocalWorker
+// GetLocalWorkerServiceClient constructs a client to the LocalWorkerService served
+// on the local worker with given ID.
+func (p *localWorkerPool) GetLocalWorkerServiceClient(id string) (api.LocalWorkerServiceClient, error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	if lw, found := p.workers[id]; found {
+		port := 0
+		secure := false
+		if info := lw.GetActual(); info != nil {
+			port = int(info.GetLocalWorkerServicePort())
+			secure = info.GetLocalWorkerServiceSecure()
 		}
-		return false, api.LocalWorker{}
+		if port == 0 {
+			return nil, fmt.Errorf("local worker [%s] does not provide local worker service port", id)
+		}
+		conn, err := util.DialConn(lw.remoteAddr, port, secure)
+		if err != nil {
+			return nil, fmt.Errorf("failed to dial local worker: %w", err)
+		}
+		return api.NewLocalWorkerServiceClient(conn), nil
 	}
-	if isReq, lw := isRequested(); isReq {
-		p.SetRequest(ctx, lw)
+	return nil, fmt.Errorf("local worker [%s] not found", id)
+}
+
+// RequestReset requests the local worker with given ID to reset itself.
+func (p *localWorkerPool) RequestReset(ctx context.Context, id string) error {
+	client, err := p.GetLocalWorkerServiceClient(id)
+	if err != nil {
+		return fmt.Errorf("failed to create local worker service client: %w", err)
 	}
+	if _, err := client.Reset(ctx, &api.Empty{}); err != nil {
+		return fmt.Errorf("failed to request reset of local worker: %w", err)
+	}
+	return nil
 }
 
 // GetAll fetches the last known info for all local workers.
@@ -167,15 +188,6 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 	lwPoolMetrics.SubRequestTotalCounter.Inc()
 	c := make(chan api.LocalWorker)
 	if enabled {
-		// Helper to reset reset flag
-		undoReset := func(id string) {
-			p.mutex.Lock()
-			defer p.mutex.Unlock()
-			if worker, found := p.workers[id]; found {
-				worker.resetRequested = false
-			}
-		}
-
 		// Subscribe
 		cb := func(msg api.LocalWorker) {
 			if msg.Request != nil && filter.MatchesModuleID(msg.GetId()) {
@@ -184,10 +196,6 @@ func (p *localWorkerPool) SubRequests(enabled bool, timeout time.Duration, filte
 				case c <- msg:
 					// Done
 					lwPoolMetrics.SubRequestMessagesTotalCounters.WithLabelValues(msg.GetId()).Inc()
-					// Reset reset flag if needed
-					if msg.GetRequest().GetReset_() {
-						go undoReset(msg.GetId())
-					}
 				case <-time.After(timeout):
 					p.log.Error().
 						Dur("timeout", timeout).

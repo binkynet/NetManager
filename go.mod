@@ -5,7 +5,7 @@ go 1.21.6
 replace github.com/coreos/go-systemd => github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a
 
 require (
-	github.com/binkynet/BinkyNet v1.8.0
+	github.com/binkynet/BinkyNet v1.10.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/mattn/go-pubsub v0.0.0-20160821075316-7a151c7747cd
 	github.com/pkg/errors v0.9.1
