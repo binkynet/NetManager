@@ -49,6 +49,17 @@ var (
 	powerPoolMetrics    = newPoolMetrics("power")
 	sensorPoolMetrics   = newPoolMetrics("sensor")
 	switchPoolMetrics   = newPoolMetrics("switch")
+
+	// Current speed in steps per loc address
+	locSpeedInSteps = metrics.MustRegisterGaugeVec(subSystem,
+		"loc_speed_in_steps",
+		"Current speed in steps per loc address",
+		"address")
+	// Current direction per loc address [1=forward, -1=backwards]
+	locDirection = metrics.MustRegisterGaugeVec(subSystem,
+		"loc_direction",
+		"Current direction per loc address [1=forward, -1=backwards]",
+		"address")
 )
 
 func newPoolMetrics(pool string) poolMetrics {

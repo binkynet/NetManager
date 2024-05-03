@@ -40,7 +40,10 @@ func newLocPool(log zerolog.Logger) *locPool {
 }
 
 func (p *locPool) SetRequest(x api.Loc) {
-	locPoolMetrics.SetRequestTotalCounters.WithLabelValues(string(x.GetAddress())).Inc()
+	addr := string(x.GetAddress())
+	locPoolMetrics.SetRequestTotalCounters.WithLabelValues(addr).Inc()
+	locSpeedInSteps.WithLabelValues(addr).Set(float64(x.GetRequest().GetSpeed()))
+	locDirection.WithLabelValues(addr).Set(locDirectionMetricsValue(x.GetRequest().GetDirection()))
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -106,4 +109,13 @@ func (p *locPool) SubActual(enabled bool, timeout time.Duration) (chan api.Loc, 
 			close(c)
 		}
 	}
+}
+
+// locDirectionMetricsValue returns the value to show in loc direction metric
+// for the given direction.
+func locDirectionMetricsValue(x api.LocDirection) float64 {
+	if x == api.LocDirection_FORWARD {
+		return 1
+	}
+	return -1
 }
