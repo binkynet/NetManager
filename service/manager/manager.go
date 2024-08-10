@@ -16,11 +16,16 @@ package manager
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/mattn/go-pubsub"
+	mqtt "github.com/mochi-mqtt/server/v2"
+	"github.com/mochi-mqtt/server/v2/hooks/auth"
+	"github.com/mochi-mqtt/server/v2/listeners"
 	"github.com/rs/zerolog"
+
+	api "github.com/binkynet/BinkyNet/apis/v1"
 )
 
 // Manager is the abstraction of the core of the network manager.
@@ -104,8 +109,20 @@ type Dependencies struct {
 
 // New creates a new Manager.
 func New(deps Dependencies) (Manager, error) {
+	// Prepare MQTT server
+	options := &mqtt.Options{
+		InlineClient: true,
+	}
+	mqttServer := mqtt.New(options)
+	// For security reasons, the default implementation disallows all connections.
+	// If you want to allow all connections, you must specifically allow it.
+	if err := mqttServer.AddHook(new(auth.AllowHook), nil); err != nil {
+		return nil, fmt.Errorf("MQTT Hook configuration failed: %w", err)
+	}
+
 	return &manager{
 		Dependencies:    deps,
+		mqttServer:      mqttServer,
 		configChanges:   pubsub.New(),
 		discoverPool:    newDiscoverPool(deps.Log),
 		powerPool:       newPowerPool(deps.Log),
@@ -123,6 +140,7 @@ func New(deps Dependencies) (Manager, error) {
 type manager struct {
 	Dependencies
 
+	mqttServer      *mqtt.Server
 	configChanges   *pubsub.PubSub
 	discoverPool    *discoverPool
 	powerPool       *powerPool
@@ -140,6 +158,21 @@ func (m *manager) Run(ctx context.Context) error {
 	defer func() {
 		log.Debug().Msg("Run finished")
 	}()
+
+	// Prepare listener
+	tcp := listeners.NewTCP(listeners.Config{
+		ID:      "t1",
+		Address: ":1883",
+	})
+	if err := m.mqttServer.AddListener(tcp); err != nil {
+		return fmt.Errorf("MQTT Listener configuration failed: %w", err)
+	}
+	go func() {
+		if err := m.mqttServer.Serve(); err != nil {
+			log.Error().Err(err).Msg("MQTT Serve failed")
+		}
+	}()
+
 	for {
 		select {
 		case id := <-m.ReconfigureQueue:
@@ -147,7 +180,8 @@ func (m *manager) Run(ctx context.Context) error {
 			log.Info().Str("id", id).Msg("Reconfiguration detected")
 			m.configChanges.Pub(id)
 		case <-ctx.Done():
-			// Context cancalled
+			// Context cancelled
+			m.mqttServer.Close()
 			return nil
 		}
 	}
