@@ -1,17 +1,17 @@
 module github.com/binkynet/NetManager
 
-go 1.21.6
+go 1.22.5
 
 replace github.com/coreos/go-systemd => github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a
 
 require (
-	github.com/binkynet/BinkyNet v1.12.0
+	github.com/binkynet/BinkyNet v1.12.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/mattn/go-pubsub v0.0.0-20160821075316-7a151c7747cd
 	github.com/mochi-mqtt/server/v2 v2.6.5
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.19.1
 	github.com/pulcy/go-terminate v0.0.0-20160630075856-d486fe7ee814
 	github.com/rs/zerolog v1.18.0
 	github.com/spf13/pflag v1.0.5
