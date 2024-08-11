@@ -182,6 +182,9 @@ func (m *manager) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			// Context cancelled
 			m.mqttServer.Close()
+			tcp.Close(func(id string) {
+				// Do nothing
+			})
 			return nil
 		}
 	}
