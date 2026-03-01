@@ -1,3 +1,4 @@
 .gobuild
 bin
 bnManager
+.DS_Store

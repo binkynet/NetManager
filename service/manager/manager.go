@@ -101,6 +101,10 @@ type Manager interface {
 type Dependencies struct {
 	Log zerolog.Logger
 
+	// MQTTServer is the MQTT server to use.
+	// If nil, a new one is created.
+	MQTTServer *mqtt.Server
+
 	// Reconfiguration queue (chan localWorkerID).
 	// The manager must listen to entries in this queue and reconfigure
 	// when it receives a local worker ID.
@@ -109,15 +113,13 @@ type Dependencies struct {
 
 // New creates a new Manager.
 func New(deps Dependencies) (Manager, error) {
-	// Prepare MQTT server
-	options := &mqtt.Options{
-		InlineClient: true,
-	}
-	mqttServer := mqtt.New(options)
-	// For security reasons, the default implementation disallows all connections.
-	// If you want to allow all connections, you must specifically allow it.
-	if err := mqttServer.AddHook(new(auth.AllowHook), nil); err != nil {
-		return nil, fmt.Errorf("MQTT Hook configuration failed: %w", err)
+	mqttServer := deps.MQTTServer
+	if mqttServer == nil {
+		var err error
+		mqttServer, err = NewMQTTServer()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &manager{
@@ -134,6 +136,42 @@ func New(deps Dependencies) (Manager, error) {
 		localWorkerPool: newLocalWorkerPool(deps.Log),
 	}, nil
 
+}
+
+// NewMQTTServer creates a new MQTT server with default settings.
+func NewMQTTServer() (*mqtt.Server, error) {
+	options := &mqtt.Options{
+		InlineClient: true,
+	}
+	mqttServer := mqtt.New(options)
+	// For security reasons, the default implementation disallows all connections.
+	// If you want to allow all connections, you must specifically allow it.
+	if err := mqttServer.AddHook(new(auth.AllowHook), nil); err != nil {
+		return nil, fmt.Errorf("MQTT Hook configuration failed: %w", err)
+	}
+	return mqttServer, nil
+}
+
+// RunMQTTServer runs the given MQTT server until the given context is cancelled.
+func RunMQTTServer(ctx context.Context, mqttServer *mqtt.Server, address string, log zerolog.Logger) error {
+	tcp := listeners.NewTCP(listeners.Config{
+		ID:      "t1",
+		Address: address,
+	})
+	if err := mqttServer.AddListener(tcp); err != nil {
+		return fmt.Errorf("MQTT Listener configuration failed: %w", err)
+	}
+	go func() {
+		if err := mqttServer.Serve(); err != nil {
+			log.Error().Err(err).Msg("MQTT Serve failed")
+		}
+	}()
+	<-ctx.Done()
+	mqttServer.Close()
+	tcp.Close(func(id string) {
+		// Do nothing
+	})
+	return nil
 }
 
 // manager implements the core of the network manager
@@ -159,19 +197,22 @@ func (m *manager) Run(ctx context.Context) error {
 		log.Debug().Msg("Run finished")
 	}()
 
-	// Prepare listener
-	tcp := listeners.NewTCP(listeners.Config{
-		ID:      "t1",
-		Address: ":1883",
-	})
-	if err := m.mqttServer.AddListener(tcp); err != nil {
-		return fmt.Errorf("MQTT Listener configuration failed: %w", err)
-	}
-	go func() {
-		if err := m.mqttServer.Serve(); err != nil {
-			log.Error().Err(err).Msg("MQTT Serve failed")
+	var tcp *listeners.TCP
+	if m.Dependencies.MQTTServer == nil {
+		// Prepare listener
+		tcp = listeners.NewTCP(listeners.Config{
+			ID:      "t1",
+			Address: ":1883",
+		})
+		if err := m.mqttServer.AddListener(tcp); err != nil {
+			return fmt.Errorf("MQTT Listener configuration failed: %w", err)
 		}
-	}()
+		go func() {
+			if err := m.mqttServer.Serve(); err != nil {
+				log.Error().Err(err).Msg("MQTT Serve failed")
+			}
+		}()
+	}
 
 	for {
 		select {
@@ -181,10 +222,12 @@ func (m *manager) Run(ctx context.Context) error {
 			m.configChanges.Pub(id)
 		case <-ctx.Done():
 			// Context cancelled
-			m.mqttServer.Close()
-			tcp.Close(func(id string) {
-				// Do nothing
-			})
+			if tcp != nil {
+				m.mqttServer.Close()
+				tcp.Close(func(id string) {
+					// Do nothing
+				})
+			}
 			return nil
 		}
 	}
