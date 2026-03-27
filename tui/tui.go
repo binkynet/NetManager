@@ -153,10 +153,21 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
-					if req.Speed < 100 {
-						req.Speed += 10
-						if req.Speed > 100 {
-							req.Speed = 100
+					if req == nil {
+						req = &api.LocState{SpeedSteps: 128}
+					}
+					maxSteps := req.GetSpeedSteps()
+					if maxSteps <= 0 {
+						maxSteps = 128
+					}
+					step := maxSteps / 10
+					if step < 1 {
+						step = 1
+					}
+					if req.Speed < maxSteps {
+						req.Speed += step
+						if req.Speed > maxSteps {
+							req.Speed = maxSteps
 						}
 						m.manager.SetLocRequest(api.Loc{
 							Address: addr,
@@ -170,9 +181,20 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
+					if req == nil {
+						req = &api.LocState{SpeedSteps: 128}
+					}
+					maxSteps := req.GetSpeedSteps()
+					if maxSteps <= 0 {
+						maxSteps = 128
+					}
+					step := maxSteps / 10
+					if step < 1 {
+						step = 1
+					}
 					if req.Speed > 0 {
-						if req.Speed >= 10 {
-							req.Speed -= 10
+						if req.Speed >= step {
+							req.Speed -= step
 						} else {
 							req.Speed = 0
 						}
@@ -188,6 +210,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
+					if req == nil {
+						req = &api.LocState{SpeedSteps: 128}
+					}
 					req.Direction = api.LocDirection_FORWARD
 					m.manager.SetLocRequest(api.Loc{
 						Address: addr,
@@ -200,6 +225,9 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
+					if req == nil {
+						req = &api.LocState{SpeedSteps: 128}
+					}
 					req.Direction = api.LocDirection_REVERSE
 					m.manager.SetLocRequest(api.Loc{
 						Address: addr,
@@ -285,15 +313,25 @@ func (m *model) headerView() string {
 
 		loc := m.locs[addr]
 		speed := 0
+		maxSteps := 128
 		dir := "FORWARD"
-		if loc.GetRequest() != nil {
-			speed = int(loc.GetRequest().GetSpeed())
-			if loc.GetRequest().GetDirection() == api.LocDirection_REVERSE {
+		
+		state := loc.GetRequest()
+		if state == nil {
+			state = loc.GetActual()
+		}
+		if state != nil {
+			speed = int(state.GetSpeed())
+			maxSteps = int(state.GetSpeedSteps())
+			if maxSteps <= 0 {
+				maxSteps = 128
+			}
+			if state.GetDirection() == api.LocDirection_REVERSE {
 				dir = "REVERSE"
 			}
 		}
 
-		s.WriteString(fmt.Sprintf("%s %s: Speed %3d%%, Dir %s\n", cursor, style.Render(string(addr)), speed, dir))
+		s.WriteString(fmt.Sprintf("%s %s: Speed %d/%d, Dir %s\n", cursor, style.Render(string(addr)), speed, maxSteps, dir))
 	}
 
 	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, a Add Loc, q Quit\n")
