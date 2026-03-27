@@ -10,6 +10,7 @@ import (
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/manager"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -24,6 +25,11 @@ type model struct {
 	viewport  viewport.Model
 	logs      []string
 	ready     bool
+
+	// Popup state
+	showAddLocPopup bool
+	textInput       textinput.Model
+	activeButton    int // 0 for Ok, 1 for Cancel
 }
 
 type powerMsg api.Power
@@ -40,6 +46,55 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 
+	if m.showAddLocPopup {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "esc":
+				m.showAddLocPopup = false
+				return m, nil
+			case "tab", "shift+tab":
+				if m.textInput.Focused() {
+					m.textInput.Blur()
+					m.activeButton = 0
+				} else {
+					m.activeButton = (m.activeButton + 1) % 2
+					if m.activeButton == 0 && msg.String() == "shift+tab" {
+						m.textInput.Focus()
+					}
+				}
+			case "left", "right":
+				if !m.textInput.Focused() {
+					m.activeButton = (m.activeButton + 1) % 2
+				}
+			case "enter":
+				if m.textInput.Focused() || m.activeButton == 0 {
+					// Ok
+					addr := api.ObjectAddress(m.textInput.Value())
+					if addr != "" {
+						if _, ok := m.locs[addr]; !ok {
+							m.locs[addr] = &api.Loc{
+								Address: addr,
+								Request: &api.LocState{},
+							}
+							m.updateAddresses()
+						}
+					}
+					m.showAddLocPopup = false
+				} else {
+					// Cancel
+					m.showAddLocPopup = false
+				}
+			}
+		}
+
+		if m.textInput.Focused() {
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -48,6 +103,15 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			m.power = !m.power
 			m.manager.SetPowerRequest(api.PowerState{Enabled: m.power})
+		case "a":
+			m.showAddLocPopup = true
+			m.textInput = textinput.New()
+			m.textInput.Placeholder = "Loc Address"
+			m.textInput.Focus()
+			m.textInput.CharLimit = 64
+			m.textInput.Width = 20
+			m.activeButton = 0
+			return m, nil
 		case "up":
 			if m.cursor > 0 {
 				m.cursor--
@@ -204,7 +268,7 @@ func (m *model) headerView() string {
 		s.WriteString(fmt.Sprintf("%s %s: Speed %3d%%, Dir %s\n", cursor, style.Render(string(addr)), speed, dir))
 	}
 
-	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, q Quit\n")
+	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, a Add Loc, q Quit\n")
 	return s.String()
 }
 
@@ -217,17 +281,77 @@ func (m *model) footerView() string {
 		Render("Logs")
 }
 
+var (
+	popupStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7D56F4")).
+			Padding(1, 2).
+			Background(lipgloss.Color("#202020"))
+
+	buttonStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FAFAFA")).
+			Background(lipgloss.Color("#3C3C3C")).
+			Padding(0, 3).
+			MarginTop(1).
+			MarginRight(2)
+
+	activeButtonStyle = buttonStyle.
+				Background(lipgloss.Color("#7D56F4"))
+)
+
+func (m *model) renderPopup() string {
+	var s strings.Builder
+	s.WriteString(lipgloss.NewStyle().Bold(true).Render("Add Locomotive"))
+	s.WriteString("\n\n")
+	s.WriteString(m.textInput.View())
+	s.WriteString("\n\n")
+
+	okStyle := buttonStyle
+	cancelStyle := buttonStyle
+
+	if !m.textInput.Focused() {
+		if m.activeButton == 0 {
+			okStyle = activeButtonStyle
+		} else {
+			cancelStyle = activeButtonStyle
+		}
+	}
+
+	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Top,
+		okStyle.Render("Ok"),
+		cancelStyle.Render("Cancel"),
+	))
+
+	return popupStyle.Render(s.String())
+}
+
 func (m *model) View() string {
 	if !m.ready {
 		return "\n  Initializing..."
 	}
 
-	return fmt.Sprintf("%s\n%s\n%s\n%s",
+	mainView := fmt.Sprintf("%s\n%s\n%s\n%s",
 		m.headerView(),
 		m.footerView(),
 		m.viewport.View(),
 		lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render("Scroll with Mouse Wheel or PgUp/PgDn"),
 	)
+
+	if m.showAddLocPopup {
+		// Place popup in the middle (roughly)
+		popup := m.renderPopup()
+		return lipgloss.Place(
+			m.viewport.Width,
+			m.viewport.Height+lipgloss.Height(m.headerView())+lipgloss.Height(m.footerView()),
+			lipgloss.Center,
+			lipgloss.Center,
+			popup,
+			lipgloss.WithWhitespaceChars(" "),
+			lipgloss.WithWhitespaceForeground(lipgloss.Color("#000000")),
+		)
+	}
+
+	return mainView
 }
 
 type logWriter struct {
