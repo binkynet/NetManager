@@ -206,7 +206,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-		case "[":
+		case "d":
 			if len(m.addresses) > 0 {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
@@ -214,22 +214,11 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if req == nil {
 						req = &api.LocState{SpeedSteps: 128}
 					}
-					req.Direction = api.LocDirection_FORWARD
-					m.manager.SetLocRequest(api.Loc{
-						Address: addr,
-						Request: req,
-					})
-				}
-			}
-		case "]":
-			if len(m.addresses) > 0 {
-				addr := m.addresses[m.cursor]
-				if loc, ok := m.locs[addr]; ok {
-					req := loc.GetRequest().Clone()
-					if req == nil {
-						req = &api.LocState{SpeedSteps: 128}
+					if req.Direction == api.LocDirection_FORWARD {
+						req.Direction = api.LocDirection_REVERSE
+					} else {
+						req.Direction = api.LocDirection_FORWARD
 					}
-					req.Direction = api.LocDirection_REVERSE
 					m.manager.SetLocRequest(api.Loc{
 						Address: addr,
 						Request: req,
@@ -332,7 +321,7 @@ func (m *model) headerView() string {
 		s.WriteString(fmt.Sprintf("%s %s: %s\n", cursor, style.Render(string(addr)), stateStr))
 	}
 
-	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, a Add Loc, q Quit\n")
+	s.WriteString("\nControls: +/- Speed, d Direction, p Power, a Add Loc, q Quit\n")
 	return s.String()
 }
 
