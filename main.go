@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
@@ -29,6 +30,7 @@ import (
 	"github.com/binkynet/NetManager/service"
 	"github.com/binkynet/NetManager/service/manager"
 	"github.com/binkynet/NetManager/service/server"
+	"github.com/binkynet/NetManager/tui"
 )
 
 const (
@@ -46,19 +48,28 @@ func main() {
 	var registryFolder string
 	var serverHost string
 	var grpcPort int
+	var noTui bool
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
 	pflag.IntVar(&grpcPort, "port", defaultGrpcPort, "Port the server is listening on")
+	pflag.BoolVar(&noTui, "no-tui", false, "Disable text based UI")
 	pflag.Parse()
 
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+	tuiEnabled := !noTui
+	var logWriter io.Writer = zerolog.ConsoleWriter{Out: os.Stderr}
+	if tuiEnabled {
+		logWriter = io.Discard
+	}
+	logger := zerolog.New(logWriter).With().Timestamp().Logger()
 
 	// Prepare to shutdown in a controlled manor
 	ctx, cancel := context.WithCancel(context.Background())
 	t := terminate.NewTerminator(func(template string, args ...interface{}) {
-		logger.Info().Msgf(template, args...)
+		if !tuiEnabled {
+			logger.Info().Msgf(template, args...)
+		}
 	}, cancel)
 	go t.ListenSignals()
 
@@ -94,11 +105,22 @@ func main() {
 		Exitf("Failed to initialize Server: %v\n", err)
 	}
 
-	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
+	if !tuiEnabled {
+		fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
+	}
 	g, ctx := errgroup.WithContext(ctx)
 	ctx = api.WithServiceInfoHost(ctx, serverHost)
 	g.Go(func() error { return mgr.Run(ctx) })
 	g.Go(func() error { return server.Run(ctx) })
+	if tuiEnabled {
+		g.Go(func() error {
+			if err := tui.Run(ctx, mgr); err != nil {
+				return err
+			}
+			cancel()
+			return nil
+		})
+	}
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)
 	}
