@@ -58,23 +58,25 @@ func main() {
 	pflag.Parse()
 
 	tuiEnabled := !noTui
+
+	// Prepare to shutdown in a controlled manor
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// Prepare local worker registry
+	reconfigureQueue := make(chan string, 64)
+
 	var logWriter io.Writer = zerolog.ConsoleWriter{Out: os.Stderr}
 	if tuiEnabled {
 		logWriter = io.Discard
 	}
 	logger := zerolog.New(logWriter).With().Timestamp().Logger()
 
-	// Prepare to shutdown in a controlled manor
-	ctx, cancel := context.WithCancel(context.Background())
 	t := terminate.NewTerminator(func(template string, args ...interface{}) {
 		if !tuiEnabled {
 			logger.Info().Msgf(template, args...)
 		}
 	}, cancel)
 	go t.ListenSignals()
-
-	// Prepare local worker registry
-	reconfigureQueue := make(chan string, 64)
 
 	// Prepare manager core
 	mgr, err := manager.New(manager.Dependencies{
@@ -83,6 +85,16 @@ func main() {
 	})
 	if err != nil {
 		Exitf("Failed to initialize Manager core: %v\n", err)
+	}
+
+	if tuiEnabled {
+		var tuiWriter io.Writer
+		tuiWriter, err = tui.Start(ctx, mgr, cancel)
+		if err != nil {
+			Exitf("Failed to initialize TUI: %v\n", err)
+		}
+		// Redirect logger to TUI
+		logger = zerolog.New(tuiWriter).With().Timestamp().Logger()
 	}
 
 	// Prepare GRPC service implementation
@@ -114,10 +126,9 @@ func main() {
 	g.Go(func() error { return server.Run(ctx) })
 	if tuiEnabled {
 		g.Go(func() error {
-			if err := tui.Run(ctx, mgr); err != nil {
-				return err
-			}
-			cancel()
+			// TUI Run is already called before, and it starts its own goroutine for p.Run()
+			// We just need to wait for context to be done.
+			<-ctx.Done()
 			return nil
 		})
 	}

@@ -3,12 +3,14 @@ package tui
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/manager"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -19,16 +21,25 @@ type model struct {
 	locs      map[api.ObjectAddress]*api.Loc
 	addresses []api.ObjectAddress
 	cursor    int
+	viewport  viewport.Model
+	logs      []string
+	ready     bool
 }
 
 type powerMsg api.Power
 type locMsg api.Loc
+type logMsg string
 
 func (m *model) Init() tea.Cmd {
 	return nil
 }
 
 func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -114,9 +125,35 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		l := api.Loc(msg)
 		m.locs[l.Address] = &l
 		m.updateAddresses()
+
+	case logMsg:
+		m.logs = append(m.logs, string(msg))
+		if len(m.logs) > 500 {
+			m.logs = m.logs[len(m.logs)-500:]
+		}
+		m.viewport.SetContent(strings.Join(m.logs, "\n"))
+		m.viewport.GotoBottom()
+
+	case tea.WindowSizeMsg:
+		headerHeight := lipgloss.Height(m.headerView())
+		footerHeight := lipgloss.Height(m.footerView())
+		verticalMarginHeight := headerHeight + footerHeight + 2 // +2 for spacing
+
+		if !m.ready {
+			m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
+			m.viewport.YPosition = headerHeight + 1
+			m.viewport.SetContent(strings.Join(m.logs, "\n"))
+			m.ready = true
+		} else {
+			m.viewport.Width = msg.Width
+			m.viewport.Height = msg.Height - verticalMarginHeight
+		}
 	}
 
-	return m, nil
+	m.viewport, cmd = m.viewport.Update(msg)
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m *model) updateAddresses() {
@@ -129,7 +166,7 @@ func (m *model) updateAddresses() {
 	})
 }
 
-func (m *model) View() string {
+func (m *model) headerView() string {
 	var s strings.Builder
 	s.WriteString(lipgloss.NewStyle().
 		Bold(true).
@@ -168,25 +205,61 @@ func (m *model) View() string {
 	}
 
 	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, q Quit\n")
-
 	return s.String()
 }
 
-func Run(ctx context.Context, mgr manager.Manager) error {
+func (m *model) footerView() string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FAFAFA")).
+		Background(lipgloss.Color("#3C3C3C")).
+		Padding(0, 1).
+		Render("Logs")
+}
+
+func (m *model) View() string {
+	if !m.ready {
+		return "\n  Initializing..."
+	}
+
+	return fmt.Sprintf("%s\n%s\n%s\n%s",
+		m.headerView(),
+		m.footerView(),
+		m.viewport.View(),
+		lipgloss.NewStyle().Foreground(lipgloss.Color("#3C3C3C")).Render("Scroll with Mouse Wheel or PgUp/PgDn"),
+	)
+}
+
+type logWriter struct {
+	send func(logMsg)
+}
+
+func (w *logWriter) Write(p []byte) (n int, err error) {
+	s := string(p)
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	for _, line := range lines {
+		if line != "" {
+			w.send(logMsg(line))
+		}
+	}
+	return len(p), nil
+}
+
+func Start(ctx context.Context, mgr manager.Manager, cancel context.CancelFunc) (io.Writer, error) {
 	m := &model{
 		manager: mgr,
 		locs:    make(map[api.ObjectAddress]*api.Loc),
 	}
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
 
 	// Start goroutines to feed messages to Bubble Tea
 	pCh, pCancel := mgr.SubscribePowerActuals(true, time.Second)
-	defer pCancel()
 	lCh, lCancel := mgr.SubscribeLocActuals(true, time.Second)
-	defer lCancel()
 
 	go func() {
+		defer pCancel()
+		defer lCancel()
 		for {
 			select {
 			case msg, ok := <-pCh:
@@ -206,6 +279,18 @@ func Run(ctx context.Context, mgr manager.Manager) error {
 		}
 	}()
 
-	_, err := p.Run()
-	return err
+	writer := &logWriter{
+		send: func(msg logMsg) {
+			p.Send(msg)
+		},
+	}
+
+	go func() {
+		defer cancel()
+		if _, err := p.Run(); err != nil {
+			fmt.Printf("Error running program: %v", err)
+		}
+	}()
+
+	return writer, nil
 }
