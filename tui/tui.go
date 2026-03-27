@@ -312,30 +312,41 @@ func (m *model) headerView() string {
 		}
 
 		loc := m.locs[addr]
-		speed := 0
-		maxSteps := 128
-		dir := "FORWARD"
-		
-		state := loc.GetRequest()
-		if state == nil {
-			state = loc.GetActual()
-		}
-		if state != nil {
-			speed = int(state.GetSpeed())
-			maxSteps = int(state.GetSpeedSteps())
-			if maxSteps <= 0 {
-				maxSteps = 128
-			}
-			if state.GetDirection() == api.LocDirection_REVERSE {
-				dir = "REVERSE"
-			}
+		req := loc.GetRequest()
+		act := loc.GetActual()
+
+		var stateStr string
+		if req != nil && act != nil && !req.Equal(act) {
+			stateStr = fmt.Sprintf("Req: %s | Act: %s", formatLocState(req), formatLocState(act))
+		} else if req != nil {
+			stateStr = formatLocState(req)
+		} else if act != nil {
+			stateStr = formatLocState(act)
+		} else {
+			stateStr = "Unknown"
 		}
 
-		s.WriteString(fmt.Sprintf("%s %s: Speed %d/%d, Dir %s\n", cursor, style.Render(string(addr)), speed, maxSteps, dir))
+		s.WriteString(fmt.Sprintf("%s %s: %s\n", cursor, style.Render(string(addr)), stateStr))
 	}
 
 	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, a Add Loc, q Quit\n")
 	return s.String()
+}
+
+func formatLocState(state *api.LocState) string {
+	if state == nil {
+		return "Unknown"
+	}
+	speed := int(state.GetSpeed())
+	maxSteps := int(state.GetSpeedSteps())
+	if maxSteps <= 0 {
+		maxSteps = 128
+	}
+	dir := "FORWARD"
+	if state.GetDirection() == api.LocDirection_REVERSE {
+		dir = "REVERSE"
+	}
+	return fmt.Sprintf("Speed %d/%d, Dir %s", speed, maxSteps, dir)
 }
 
 func (m *model) footerView() string {
