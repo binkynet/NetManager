@@ -170,6 +170,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if req.Speed > maxSteps {
 							req.Speed = maxSteps
 						}
+						loc.Request = req
 						m.manager.SetLocRequest(api.Loc{
 							Address: addr,
 							Request: req,
@@ -199,6 +200,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						} else {
 							req.Speed = 0
 						}
+						loc.Request = req
 						m.manager.SetLocRequest(api.Loc{
 							Address: addr,
 							Request: req,
@@ -219,6 +221,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						req.Direction = api.LocDirection_FORWARD
 					}
+					loc.Request = req
 					m.manager.SetLocRequest(api.Loc{
 						Address: addr,
 						Request: req,
