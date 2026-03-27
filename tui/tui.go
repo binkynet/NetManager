@@ -17,14 +17,15 @@ import (
 )
 
 type model struct {
-	manager   manager.Manager
-	power     bool
-	locs      map[api.ObjectAddress]*api.Loc
-	addresses []api.ObjectAddress
-	cursor    int
-	viewport  viewport.Model
-	logs      []string
-	ready     bool
+	manager        manager.Manager
+	requestedPower bool
+	actualPower    bool
+	locs           map[api.ObjectAddress]*api.Loc
+	addresses      []api.ObjectAddress
+	cursor         int
+	viewport       viewport.Model
+	logs           []string
+	ready          bool
 
 	// Popup state
 	showAddLocPopup  bool
@@ -127,8 +128,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "p":
-			m.power = !m.power
-			m.manager.SetPowerRequest(api.PowerState{Enabled: m.power})
+			m.requestedPower = !m.requestedPower
+			m.manager.SetPowerRequest(api.PowerState{Enabled: m.requestedPower})
 		case "a":
 			m.showAddLocPopup = true
 			m.textInput = textinput.New()
@@ -239,7 +240,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case powerMsg:
 		p := api.Power(msg)
-		m.power = p.GetActual().GetEnabled()
+		m.requestedPower = p.GetRequest().GetEnabled()
+		m.actualPower = p.GetActual().GetEnabled()
 
 	case locMsg:
 		l := api.Loc(msg)
@@ -296,11 +298,12 @@ func (m *model) headerView() string {
 		Render("BinkyNet Network Manager"))
 	s.WriteString("\n\n")
 
-	powerStr := "OFF"
-	if m.power {
-		powerStr = "ON"
+	actPowerStr := formatPower(m.actualPower)
+	powerView := actPowerStr
+	if m.requestedPower != m.actualPower {
+		powerView = fmt.Sprintf("Req: %s | Act: %s", formatPower(m.requestedPower), actPowerStr)
 	}
-	s.WriteString(fmt.Sprintf("Global Power: %s (press 'p' to toggle)\n\n", powerStr))
+	s.WriteString(fmt.Sprintf("Global Power: %s (press 'p' to toggle)\n\n", powerView))
 
 	s.WriteString("Trains:\n")
 	for i, addr := range m.addresses {
@@ -331,6 +334,13 @@ func (m *model) headerView() string {
 
 	s.WriteString("\nControls: +/- Speed, [/] Direction, p Power, a Add Loc, q Quit\n")
 	return s.String()
+}
+
+func formatPower(enabled bool) string {
+	if enabled {
+		return "ON"
+	}
+	return "OFF"
 }
 
 func formatLocState(state *api.LocState) string {
