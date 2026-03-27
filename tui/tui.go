@@ -27,10 +27,14 @@ type model struct {
 	ready     bool
 
 	// Popup state
-	showAddLocPopup bool
-	textInput       textinput.Model
-	activeButton    int // 0 for Ok, 1 for Cancel
+	showAddLocPopup  bool
+	textInput        textinput.Model
+	activeButton     int // 0 for Ok, 1 for Cancel
+	speedStepsCursor int // 0: 14, 1: 28, 2: 128
+	popupFocus       int // 0: Address, 1: SpeedSteps, 2: Buttons
 }
+
+var speedStepsOptions = []int32{14, 28, 128}
 
 type powerMsg api.Power
 type locMsg api.Loc
@@ -54,41 +58,63 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.showAddLocPopup = false
 				return m, nil
 			case "tab", "shift+tab":
-				if m.textInput.Focused() {
-					m.textInput.Blur()
-					m.activeButton = 0
+				if msg.String() == "tab" {
+					m.popupFocus = (m.popupFocus + 1) % 3
 				} else {
-					m.activeButton = (m.activeButton + 1) % 2
-					if m.activeButton == 0 && msg.String() == "shift+tab" {
-						m.textInput.Focus()
-					}
+					m.popupFocus = (m.popupFocus + 2) % 3
 				}
+				if m.popupFocus == 0 {
+					m.textInput.Focus()
+				} else {
+					m.textInput.Blur()
+				}
+				return m, nil
 			case "left", "right":
-				if !m.textInput.Focused() {
+				if m.popupFocus == 1 {
+					if msg.String() == "left" {
+						m.speedStepsCursor = (m.speedStepsCursor + 2) % 3
+					} else {
+						m.speedStepsCursor = (m.speedStepsCursor + 1) % 3
+					}
+				} else if m.popupFocus == 2 {
 					m.activeButton = (m.activeButton + 1) % 2
 				}
+			case "up", "down":
+				if msg.String() == "up" {
+					m.popupFocus = (m.popupFocus + 2) % 3
+				} else {
+					m.popupFocus = (m.popupFocus + 1) % 3
+				}
+				if m.popupFocus == 0 {
+					m.textInput.Focus()
+				} else {
+					m.textInput.Blur()
+				}
+				return m, nil
 			case "enter":
-				if m.textInput.Focused() || m.activeButton == 0 {
-					// Ok
+				if m.popupFocus == 2 && m.activeButton == 1 {
+					// Cancel
+					m.showAddLocPopup = false
+				} else {
+					// Ok (or enter in input/speedsteps)
 					addr := api.ObjectAddress(m.textInput.Value())
 					if addr != "" {
 						if _, ok := m.locs[addr]; !ok {
 							m.locs[addr] = &api.Loc{
 								Address: addr,
-								Request: &api.LocState{},
+								Request: &api.LocState{
+									SpeedSteps: speedStepsOptions[m.speedStepsCursor],
+								},
 							}
 							m.updateAddresses()
 						}
 					}
 					m.showAddLocPopup = false
-				} else {
-					// Cancel
-					m.showAddLocPopup = false
 				}
 			}
 		}
 
-		if m.textInput.Focused() {
+		if m.popupFocus == 0 {
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
 		}
@@ -111,6 +137,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput.CharLimit = 64
 			m.textInput.Width = 20
 			m.activeButton = 0
+			m.speedStepsCursor = 2 // Default 128
+			m.popupFocus = 0
 			return m, nil
 		case "up":
 			if m.cursor > 0 {
@@ -297,19 +325,55 @@ var (
 
 	activeButtonStyle = buttonStyle.
 				Background(lipgloss.Color("#7D56F4"))
+
+	labelStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#AAAAAA")).
+			MarginRight(1)
+
+	choiceStyle = lipgloss.NewStyle().
+			Padding(0, 1).
+			MarginRight(1).
+			Background(lipgloss.Color("#3C3C3C"))
+
+	activeChoiceStyle = choiceStyle.
+				Background(lipgloss.Color("#7D56F4")).
+				Foreground(lipgloss.Color("#FAFAFA"))
 )
 
 func (m *model) renderPopup() string {
 	var s strings.Builder
 	s.WriteString(lipgloss.NewStyle().Bold(true).Render("Add Locomotive"))
 	s.WriteString("\n\n")
+
+	// Address input
+	addrLabel := labelStyle.Render("Address:")
+	if m.popupFocus == 0 {
+		addrLabel = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7D56F4")).Render("Address:")
+	}
+	s.WriteString(addrLabel)
 	s.WriteString(m.textInput.View())
 	s.WriteString("\n\n")
 
+	// Speed steps combo
+	s.WriteString(labelStyle.Render("Speed Steps:"))
+	for i, opt := range speedStepsOptions {
+		style := choiceStyle
+		if i == m.speedStepsCursor {
+			if m.popupFocus == 1 {
+				style = activeChoiceStyle
+			} else {
+				style = choiceStyle.Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("#7D56F4"))
+			}
+		}
+		s.WriteString(style.Render(fmt.Sprintf("%d", opt)))
+	}
+	s.WriteString("\n\n")
+
+	// Buttons
 	okStyle := buttonStyle
 	cancelStyle := buttonStyle
 
-	if !m.textInput.Focused() {
+	if m.popupFocus == 2 {
 		if m.activeButton == 0 {
 			okStyle = activeButtonStyle
 		} else {
