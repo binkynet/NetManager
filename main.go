@@ -48,12 +48,14 @@ func main() {
 	var registryFolder string
 	var serverHost string
 	var grpcPort int
+	var lokiPort int
 	var noTui bool
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
 	pflag.IntVar(&grpcPort, "port", defaultGrpcPort, "Port the server is listening on")
+	pflag.IntVar(&lokiPort, "loki-port", 8423, "Port the Loki server is listening on (0 to disable)")
 	pflag.BoolVar(&noTui, "no-tui", false, "Disable text based UI")
 	pflag.Parse()
 
@@ -112,6 +114,7 @@ func main() {
 	server, err := server.NewServer(server.Config{
 		Host:     serverHost,
 		GRPCPort: grpcPort,
+		LokiPort: lokiPort,
 	}, svc, logger)
 	if err != nil {
 		Exitf("Failed to initialize Server: %v\n", err)

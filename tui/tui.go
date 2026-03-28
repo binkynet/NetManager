@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,7 @@ type model struct {
 	manager        manager.Manager
 	requestedPower bool
 	actualPower    bool
+	workers        map[string]*api.LocalWorker
 	locs           map[api.ObjectAddress]*api.Loc
 	addresses      []api.ObjectAddress
 	cursor         int
@@ -37,9 +39,10 @@ type model struct {
 
 var speedStepsOptions = []int32{14, 28, 128}
 
-type powerMsg api.Power
-type locMsg api.Loc
-type logMsg string
+type powerActualMsg api.Power
+type locActualMsg api.Loc
+type workerActualMsg api.LocalWorker
+type logMsgs []string
 
 func (m *model) Init() tea.Cmd {
 	return nil
@@ -101,13 +104,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					addr := api.ObjectAddress(m.textInput.Value())
 					if addr != "" {
 						if _, ok := m.locs[addr]; !ok {
-							m.locs[addr] = &api.Loc{
-								Address: addr,
-								Request: &api.LocState{
-									SpeedSteps: speedStepsOptions[m.speedStepsCursor],
-								},
-							}
-							m.updateAddresses()
+							m.addLoc(addr, speedStepsOptions[m.speedStepsCursor])
 						}
 					}
 					m.showAddLocPopup = false
@@ -149,62 +146,29 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.addresses)-1 {
 				m.cursor++
 			}
-		case "+":
+		case "right":
 			if len(m.addresses) > 0 {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
-					if req == nil {
-						req = &api.LocState{SpeedSteps: 128}
-					}
 					maxSteps := req.GetSpeedSteps()
 					if maxSteps <= 0 {
 						maxSteps = 128
 					}
-					step := maxSteps / 10
-					if step < 1 {
-						step = 1
-					}
 					if req.Speed < maxSteps {
-						req.Speed += step
-						if req.Speed > maxSteps {
-							req.Speed = maxSteps
-						}
-						loc.Request = req
-						m.manager.SetLocRequest(api.Loc{
-							Address: addr,
-							Request: req,
-						})
+						req.Speed++
+						m.setLocRequest(addr, req)
 					}
 				}
 			}
-		case "-":
+		case "left":
 			if len(m.addresses) > 0 {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
-					if req == nil {
-						req = &api.LocState{SpeedSteps: 128}
-					}
-					maxSteps := req.GetSpeedSteps()
-					if maxSteps <= 0 {
-						maxSteps = 128
-					}
-					step := maxSteps / 10
-					if step < 1 {
-						step = 1
-					}
 					if req.Speed > 0 {
-						if req.Speed >= step {
-							req.Speed -= step
-						} else {
-							req.Speed = 0
-						}
-						loc.Request = req
-						m.manager.SetLocRequest(api.Loc{
-							Address: addr,
-							Request: req,
-						})
+						req.Speed--
+						m.setLocRequest(addr, req)
 					}
 				}
 			}
@@ -213,37 +177,40 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				addr := m.addresses[m.cursor]
 				if loc, ok := m.locs[addr]; ok {
 					req := loc.GetRequest().Clone()
-					if req == nil {
-						req = &api.LocState{SpeedSteps: 128}
-					}
 					if req.Direction == api.LocDirection_FORWARD {
 						req.Direction = api.LocDirection_REVERSE
 					} else {
 						req.Direction = api.LocDirection_FORWARD
 					}
-					loc.Request = req
-					m.manager.SetLocRequest(api.Loc{
-						Address: addr,
-						Request: req,
-					})
+					m.setLocRequest(addr, req)
 				}
 			}
 		}
 
-	case powerMsg:
+	case powerActualMsg:
 		p := api.Power(msg)
-		m.requestedPower = p.GetRequest().GetEnabled()
 		m.actualPower = p.GetActual().GetEnabled()
 
-	case locMsg:
-		l := api.Loc(msg)
-		m.locs[l.Address] = &l
-		m.updateAddresses()
+	case locActualMsg:
+		lMsg := api.Loc(msg)
+		if l, found := m.locs[lMsg.Address]; found {
+			l.Actual = lMsg.GetActual().Clone()
+		}
 
-	case logMsg:
-		m.logs = append(m.logs, string(msg))
-		if len(m.logs) > 500 {
-			m.logs = m.logs[len(m.logs)-500:]
+	case workerActualMsg:
+		wMsg := api.LocalWorker(msg)
+		m.workers[wMsg.Id] = &wMsg
+
+	case logMsgs:
+		const maxLogLines = 100
+		for _, line := range msg {
+			line = strconv.Itoa(len(m.logs)) + " - " + line
+			if len(m.logs) >= maxLogLines {
+				copy(m.logs, m.logs[1:])
+				m.logs[len(m.logs)-1] = line
+			} else {
+				m.logs = append(m.logs, line)
+			}
 		}
 		m.viewport.SetContent(strings.Join(m.logs, "\n"))
 		m.viewport.GotoBottom()
@@ -268,6 +235,31 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *model) setLocRequest(addr api.ObjectAddress, req *api.LocState) {
+	m.locs[addr].Request = req
+	m.manager.SetLocRequest(api.Loc{
+		Address: addr,
+		Request: req,
+	})
+}
+
+func (m *model) addLoc(addr api.ObjectAddress, speedSteps int32) {
+	m.locs[addr] = &api.Loc{
+		Address: addr,
+		Request: &api.LocState{
+			SpeedSteps: speedSteps,
+			Speed:      0,
+			Direction:  api.LocDirection_FORWARD,
+		},
+		Actual: &api.LocState{
+			SpeedSteps: speedSteps,
+			Speed:      0,
+			Direction:  api.LocDirection_FORWARD,
+		},
+	}
+	m.updateAddresses()
 }
 
 func (m *model) updateAddresses() {
@@ -297,6 +289,24 @@ func (m *model) headerView() string {
 	}
 	s.WriteString(fmt.Sprintf("Global Power: %s (press 'p' to toggle)\n\n", powerView))
 
+	if len(m.workers) > 0 {
+		s.WriteString("Local Workers:\n")
+		ids := make([]string, 0, len(m.workers))
+		for id := range m.workers {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for _, id := range ids {
+			w := m.workers[id]
+			status := "Offline"
+			if w.Actual != nil {
+				status = fmt.Sprintf("Online (v%s, uptime %s)", w.Actual.Version, (time.Duration(w.Actual.Uptime) * time.Second).String())
+			}
+			s.WriteString(fmt.Sprintf("  %s: %s\n", id, status))
+		}
+		s.WriteString("\n")
+	}
+
 	s.WriteString("Trains:\n")
 	for i, addr := range m.addresses {
 		cursor := " "
@@ -324,7 +334,7 @@ func (m *model) headerView() string {
 		s.WriteString(fmt.Sprintf("%s %s: %s\n", cursor, style.Render(string(addr)), stateStr))
 	}
 
-	s.WriteString("\nControls: +/- Speed, d Direction, p Power, a Add Loc, q Quit\n")
+	s.WriteString("\nControls: left/right Speed, d Direction, p Power, a Add Loc, q Quit\n")
 	return s.String()
 }
 
@@ -470,23 +480,20 @@ func (m *model) View() string {
 }
 
 type logWriter struct {
-	send func(logMsg)
+	send func(logMsgs)
 }
 
 func (w *logWriter) Write(p []byte) (n int, err error) {
 	s := string(p)
 	lines := strings.Split(strings.TrimSpace(s), "\n")
-	for _, line := range lines {
-		if line != "" {
-			w.send(logMsg(line))
-		}
-	}
+	w.send(logMsgs(lines))
 	return len(p), nil
 }
 
 func Start(ctx context.Context, mgr manager.Manager, cancel context.CancelFunc) (io.Writer, error) {
 	m := &model{
 		manager: mgr,
+		workers: make(map[string]*api.LocalWorker),
 		locs:    make(map[api.ObjectAddress]*api.Loc),
 	}
 
@@ -495,22 +502,29 @@ func Start(ctx context.Context, mgr manager.Manager, cancel context.CancelFunc) 
 	// Start goroutines to feed messages to Bubble Tea
 	pCh, pCancel := mgr.SubscribePowerActuals(true, time.Second)
 	lCh, lCancel := mgr.SubscribeLocActuals(true, time.Second)
+	wCh, wCancel := mgr.SubscribeLocalWorkerActuals(true, time.Second, "")
 
 	go func() {
 		defer pCancel()
 		defer lCancel()
+		defer wCancel()
 		for {
 			select {
 			case msg, ok := <-pCh:
 				if !ok {
 					return
 				}
-				p.Send(powerMsg(msg))
+				p.Send(powerActualMsg(msg))
 			case msg, ok := <-lCh:
 				if !ok {
 					return
 				}
-				p.Send(locMsg(msg))
+				p.Send(locActualMsg(msg))
+			case msg, ok := <-wCh:
+				if !ok {
+					return
+				}
+				p.Send(workerActualMsg(msg))
 			case <-ctx.Done():
 				p.Quit()
 				return
@@ -519,7 +533,7 @@ func Start(ctx context.Context, mgr manager.Manager, cancel context.CancelFunc) 
 	}()
 
 	writer := &logWriter{
-		send: func(msg logMsg) {
+		send: func(msg logMsgs) {
 			p.Send(msg)
 		},
 	}
