@@ -216,8 +216,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.logs = append(m.logs, line)
 			}
 		}
-		m.viewport.SetContent(strings.Join(m.logs, "\n"))
-		m.viewport.GotoBottom()
+		m.viewport.SetContent(m.renderLogs())
+		m.viewport.GotoTop()
 
 	case tea.WindowSizeMsg:
 		headerHeight := lipgloss.Height(m.headerView())
@@ -227,7 +227,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !m.ready {
 			m.viewport = viewport.New(msg.Width, msg.Height-verticalMarginHeight)
 			m.viewport.YPosition = headerHeight + 1
-			m.viewport.SetContent(strings.Join(m.logs, "\n"))
+			m.viewport.SetContent(m.renderLogs())
 			m.ready = true
 		} else {
 			m.viewport.Width = msg.Width
@@ -239,6 +239,14 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *model) renderLogs() string {
+	reversed := make([]string, len(m.logs))
+	for i, line := range m.logs {
+		reversed[len(m.logs)-1-i] = line
+	}
+	return strings.Join(reversed, "\n")
 }
 
 func (m *model) setLocRequest(addr api.ObjectAddress, req *api.LocState) {
