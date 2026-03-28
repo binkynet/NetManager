@@ -282,15 +282,18 @@ func (m *model) headerView() string {
 		Render("BinkyNet Network Manager"))
 	s.WriteString("\n\n")
 
+	// Left side: Global Power
 	actPowerStr := formatPower(m.actualPower)
 	powerView := actPowerStr
 	if m.requestedPower != m.actualPower {
 		powerView = fmt.Sprintf("Req: %s | Act: %s", formatPower(m.requestedPower), actPowerStr)
 	}
-	s.WriteString(fmt.Sprintf("Global Power: %s (press 'p' to toggle)\n\n", powerView))
+	powerBlock := fmt.Sprintf("Global Power: %s (press 'p' to toggle)", powerView)
 
+	// Right side: Local Workers
+	var workersBlock string
 	if len(m.workers) > 0 {
-		s.WriteString("Local Workers:\n")
+		var wLines []string
 		ids := make([]string, 0, len(m.workers))
 		for id := range m.workers {
 			ids = append(ids, id)
@@ -302,10 +305,18 @@ func (m *model) headerView() string {
 			if w.Actual != nil {
 				status = fmt.Sprintf("Online (v%s, uptime %s)", w.Actual.Version, (time.Duration(w.Actual.Uptime) * time.Second).String())
 			}
-			s.WriteString(fmt.Sprintf("  %s: %s\n", id, status))
+			wLines = append(wLines, fmt.Sprintf("%s: %s", id, status))
 		}
-		s.WriteString("\n")
+		workersBlock = strings.Join(wLines, "\n")
 	}
+
+	// Join Power (Left) and Workers (Right)
+	statusLine := lipgloss.JoinHorizontal(lipgloss.Top,
+		lipgloss.NewStyle().Width(m.viewport.Width/2).Render(powerBlock),
+		lipgloss.NewStyle().Width(m.viewport.Width/2).Align(lipgloss.Right).Render(workersBlock),
+	)
+	s.WriteString(statusLine)
+	s.WriteString("\n\n")
 
 	s.WriteString("Trains:\n")
 	for i, addr := range m.addresses {
