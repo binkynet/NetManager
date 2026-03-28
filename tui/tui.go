@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -27,6 +26,7 @@ type model struct {
 	cursor         int
 	viewport       viewport.Model
 	logs           []string
+	totalLogLines  int64
 	ready          bool
 
 	// Popup state
@@ -204,7 +204,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case logMsgs:
 		const maxLogLines = 100
 		for _, line := range msg {
-			line = strconv.Itoa(len(m.logs)) + " - " + line
+			m.totalLogLines++
+			line = fmt.Sprintf("%05d - %s", m.totalLogLines, line)
 			if len(m.logs) >= maxLogLines {
 				copy(m.logs, m.logs[1:])
 				m.logs[len(m.logs)-1] = line
