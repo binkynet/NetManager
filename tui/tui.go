@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	api "github.com/binkynet/BinkyNet/apis/v1"
 	"github.com/binkynet/NetManager/service/manager"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -124,6 +125,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c", "q":
 			return m, tea.Quit
+		case "c":
+			clipboard.WriteAll(strings.Join(m.logs, "\n"))
 		case "p":
 			m.requestedPower = !m.requestedPower
 			m.manager.SetPowerRequest(api.PowerState{Enabled: m.requestedPower})
@@ -346,7 +349,7 @@ func (m *model) headerView() string {
 		s.WriteString(fmt.Sprintf("%s %s: %s\n", cursor, style.Render(string(addr)), stateStr))
 	}
 
-	s.WriteString("\nControls: left/right Speed, d Direction, p Power, a Add Loc, q Quit\n")
+	s.WriteString("\nControls: left/right Speed, d Direction, p Power, a Add Loc, c Copy Logs, q Quit\n")
 	return s.String()
 }
 
