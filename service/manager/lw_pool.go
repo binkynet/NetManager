@@ -111,6 +111,21 @@ func (p *localWorkerPool) RequestReset(ctx context.Context, id string) error {
 	return nil
 }
 
+// Is there a local worker that supports the SetPowerRequest method?
+func (p *localWorkerPool) HasSupportSetPower() bool {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+
+	for _, entry := range p.workers {
+		if actual := entry.GetActual(); actual != nil {
+			if actual.GetSupportsSetPowerRequest() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // GetAll fetches the last known info for all local workers.
 func (p *localWorkerPool) GetAll() []api.LocalWorkerInfo {
 	p.mutex.RLock()
