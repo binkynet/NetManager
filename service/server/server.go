@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"time"
+	"net/http"
 
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/rs/zerolog"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/binkynet/BinkyNet/apis/util"
 	api "github.com/binkynet/BinkyNet/apis/v1"
+	"github.com/binkynet/BinkyNet/loki"
 )
 
 type Server interface {
@@ -30,6 +32,7 @@ type Service interface {
 type Config struct {
 	Host     string
 	GRPCPort int
+	LokiPort int
 }
 
 func (c Config) createTLSConfig() (*tls.Config, error) {
@@ -97,6 +100,35 @@ func (s *server) Run(ctx context.Context) error {
 		})
 		return util.ContextCanceledOrUnexpected(nctx, err, "NetManager.server.RegisterServiceEntry")
 	})
+	if s.LokiPort > 0 {
+		g.Go(func() error {
+			lokiAddr := net.JoinHostPort(s.Host, strconv.Itoa(s.LokiPort))
+			lokiLis, err := net.Listen("tcp", lokiAddr)
+			if err != nil {
+				log.Fatal().Msgf("failed to listen for Loki on address %s: %v", lokiAddr, err)
+			}
+			lokiSrv := &http.Server{
+				Handler: loki.NewLokiHandler(loki.NewZerologLokiServer(log)),
+			}
+			go func() {
+				<-nctx.Done()
+				lokiSrv.Close()
+			}()
+			if err := lokiSrv.Serve(lokiLis); err != nil && err != http.ErrServerClosed {
+				log.Warn().Err(err).Msg("failed to serve Loki")
+				return err
+			}
+			return nil
+		})
+		g.Go(func() error {
+			err := api.RegisterServiceEntry(nctx, api.ServiceTypeLokiProvider, api.ServiceInfo{
+				ApiVersion: "v1",
+				ApiPort:    int32(s.LokiPort),
+				Secure:     false,
+			})
+			return util.ContextCanceledOrUnexpected(nctx, err, "NetManager.server.RegisterLokiServiceEntry")
+		})
+	}
 	g.Go(func() error {
 		// Wait for content cancellation
 		select {

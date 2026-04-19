@@ -17,6 +17,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	api "github.com/binkynet/BinkyNet/apis/v1"
@@ -29,6 +30,7 @@ import (
 	"github.com/binkynet/NetManager/service"
 	"github.com/binkynet/NetManager/service/manager"
 	"github.com/binkynet/NetManager/service/server"
+	"github.com/binkynet/NetManager/tui"
 )
 
 const (
@@ -46,24 +48,37 @@ func main() {
 	var registryFolder string
 	var serverHost string
 	var grpcPort int
+	var lokiPort int
+	var noTui bool
 
 	pflag.StringVarP(&levelFlag, "level", "l", "debug", "Set log level")
 	pflag.StringVar(&registryFolder, "folder", "./examples", "Folder containing worker configurations")
 	pflag.StringVar(&serverHost, "host", "0.0.0.0", "Host the server is listening on")
 	pflag.IntVar(&grpcPort, "port", defaultGrpcPort, "Port the server is listening on")
+	pflag.IntVar(&lokiPort, "loki-port", 8423, "Port the Loki server is listening on (0 to disable)")
+	pflag.BoolVar(&noTui, "no-tui", false, "Disable text based UI")
 	pflag.Parse()
 
-	logger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger()
+	tuiEnabled := !noTui
 
 	// Prepare to shutdown in a controlled manor
 	ctx, cancel := context.WithCancel(context.Background())
-	t := terminate.NewTerminator(func(template string, args ...interface{}) {
-		logger.Info().Msgf(template, args...)
-	}, cancel)
-	go t.ListenSignals()
 
 	// Prepare local worker registry
 	reconfigureQueue := make(chan string, 64)
+
+	var logWriter io.Writer = zerolog.ConsoleWriter{Out: os.Stderr}
+	if tuiEnabled {
+		logWriter = io.Discard
+	}
+	logger := zerolog.New(logWriter).With().Timestamp().Logger()
+
+	t := terminate.NewTerminator(func(template string, args ...interface{}) {
+		if !tuiEnabled {
+			logger.Info().Msgf(template, args...)
+		}
+	}, cancel)
+	go t.ListenSignals()
 
 	// Prepare manager core
 	mgr, err := manager.New(manager.Dependencies{
@@ -72,6 +87,16 @@ func main() {
 	})
 	if err != nil {
 		Exitf("Failed to initialize Manager core: %v\n", err)
+	}
+
+	if tuiEnabled {
+		var tuiWriter io.Writer
+		tuiWriter, err = tui.Start(ctx, mgr, cancel)
+		if err != nil {
+			Exitf("Failed to initialize TUI: %v\n", err)
+		}
+		// Redirect logger to TUI
+		logger = zerolog.New(tuiWriter).With().Timestamp().Logger()
 	}
 
 	// Prepare GRPC service implementation
@@ -89,16 +114,27 @@ func main() {
 	server, err := server.NewServer(server.Config{
 		Host:     serverHost,
 		GRPCPort: grpcPort,
+		LokiPort: lokiPort,
 	}, svc, logger)
 	if err != nil {
 		Exitf("Failed to initialize Server: %v\n", err)
 	}
 
-	fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
+	if !tuiEnabled {
+		fmt.Printf("Starting %s (version %s build %s)\n", projectName, projectVersion, projectBuild)
+	}
 	g, ctx := errgroup.WithContext(ctx)
 	ctx = api.WithServiceInfoHost(ctx, serverHost)
 	g.Go(func() error { return mgr.Run(ctx) })
 	g.Go(func() error { return server.Run(ctx) })
+	if tuiEnabled {
+		g.Go(func() error {
+			// TUI Run is already called before, and it starts its own goroutine for p.Run()
+			// We just need to wait for context to be done.
+			<-ctx.Done()
+			return nil
+		})
+	}
 	if err := g.Wait(); err != nil && errors.Cause(err) != context.Canceled {
 		Exitf("Failed to run services: %#v\n", err)
 	}
