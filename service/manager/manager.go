@@ -318,8 +318,12 @@ func (m *manager) SetPowerRequest(x api.PowerState) {
 	m.powerPool.SetRequest(x)
 	log := m.Log
 	go func() {
+		hasDccLW := false
 		for _, lwInfo := range m.localWorkerPool.GetAll() {
 			if lwInfo.GetSupportsSetPowerRequest() {
+				if lwInfo.GetId() == "dcc" {
+					hasDccLW = true
+				}
 				if client, err := m.localWorkerPool.GetLocalWorkerServiceClient(lwInfo.GetId()); err != nil {
 					log.Error().Err(err).
 						Str("id", lwInfo.GetId()).
@@ -332,6 +336,13 @@ func (m *manager) SetPowerRequest(x api.PowerState) {
 					}
 				}
 			}
+		}
+		if !hasDccLW {
+			// No local worker supports SetPowerRequest, so we set active ourselves
+			m.SetPowerActual(x)
+			log.Info().Msg("SetPowerActual is automatically called")
+		} else {
+			log.Info().Msg("SetPowerActual is NOT automatically called")
 		}
 	}()
 }
